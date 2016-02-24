@@ -2,6 +2,15 @@ import argparse
 import gzip
 import numpy
 import os
+import time
+
+def time_call(f):
+    def wrapper(*args):
+        time1 = time.time()
+        output = f(*args)
+        time2 = time.time()
+        print "Call to %s completed in %0.3f seconds" % (f.func_name, (time2 - time1))
+    return wrapper
 
 def open_file(path):
     if path.endswith('.gz'):
@@ -34,6 +43,7 @@ def get_wordmap(path):
                         index += 1
     return wordmap
 
+@time_call
 def process_corpus(path):
     wordmap = get_wordmap(path)
     print len(wordmap)
