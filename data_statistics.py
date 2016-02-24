@@ -1,12 +1,17 @@
 import argparse
+import gzip
 import numpy
+import os
 
 def open_file(path):
-    f = open(path, 'r')
+    if path.endswith('.gz'):
+        f = gzip.open(path, 'r')
+    else:
+        f = open(path, 'r')
     return f
 
 def tokenize(line):
-    return map(lambda x: x.lower(), filter(filter_helper, line))
+    return map(lambda x: x.lower(), filter(filter_helper, line.split(' ')))
 
 def filter_helper(word):
     if '<doc' in word or 'doc>' in word:
@@ -15,19 +20,22 @@ def filter_helper(word):
         return False
 
 def get_wordmap(path):
-    f = open_file(path)
     wordmap = {}
     index = 0
-    for line in f:
-        tokens = tokenize(line)
-        for token in tokens:
-            if not token in wordmap:
-                wordmap[token] = index
-                index += 1
+    for root, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            f = open_file(os.path.join(root, filename))
+            for line in f:
+                tokens = tokenize(line)
+                for token in tokens:
+                    if not token in wordmap:
+                        wordmap[token] = index
+                        index += 1
     return wordmap
 
 def process_corpus(path):
     wordmap = get_wordmap(path)
+    print len(wordmap)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess corpus.")
