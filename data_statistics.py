@@ -23,7 +23,8 @@ def get_wordmap(path):
     wordmap = {}
     index = 0
     for root, dirnames, filenames in os.walk(path):
-        for filename in filenames:
+        for i, filename in enumerate(filenames):
+            print "Processing %s file %d out of %d" % (root, i+1, len(filenames))
             f = open_file(os.path.join(root, filename))
             for line in f:
                 tokens = tokenize(line)
