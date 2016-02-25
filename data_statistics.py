@@ -24,13 +24,12 @@ def tokenize(line):
 
 def filter_helper(word):
     if '<doc' in word or 'doc>' in word:
-        return True 
-    else:
         return False
+    else:
+        return True
 
-def get_wordmap(path):
-    wordmap = {}
-    index = 0
+def get_wordmap(path, threshold):
+    wordcount = {}
     for root, dirnames, filenames in os.walk(path):
         for i, filename in enumerate(filenames):
             print "Processing %s file %d out of %d" % (root, i+1, len(filenames))
@@ -38,15 +37,22 @@ def get_wordmap(path):
             for line in f:
                 tokens = tokenize(line)
                 for token in tokens:
-                    if not token in wordmap:
-                        wordmap[token] = index
-                        index += 1
+                    if not token in wordcount:
+                        wordcount[token] = 1
+                    else:
+                        wordcount[token] += 1
+    words = map(lambda x: (x, wordcount[x]), wordcount.keys())
+    words.sort(key=lambda x: x[1], reverse=True)
+    wordmap = {}
+    index = 0
+    while index < threshold and index < len(words):
+        wordmap[words[index][0]] = index
+        index += 1
     return wordmap
 
 @time_call
 def process_corpus(path):
-    wordmap = get_wordmap(path)
-    print len(wordmap)
+    wordmap = get_wordmap(path, 10000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess corpus.")
