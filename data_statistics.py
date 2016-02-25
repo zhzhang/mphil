@@ -1,6 +1,6 @@
 import argparse
 import gzip
-import numpy
+import numpy as np
 import os
 import time
 
@@ -28,6 +28,7 @@ def filter_helper(word):
     else:
         return True
 
+@time_call
 def get_wordmap(path, threshold):
     wordcount = {}
     for root, dirnames, filenames in os.walk(path):
@@ -51,8 +52,25 @@ def get_wordmap(path, threshold):
     return wordmap
 
 @time_call
+def check_sparsity(path, wordmap):
+    nonzeros = {}
+    for root, dirnames, filenames in os.walk(path):
+        for i, filename in enumerate(filenames):
+            f = open_file(os.path.join(root, filename))
+            for line in f:
+                tokens = tokenize(line)
+                for target in tokens:
+                    if not target in nonzeros:
+                        nonzeros[target] = np.zeros(len(wordmap))
+                    for token in tokens:
+                        if token in wordmap:
+                            nonzeros[target][wordmap[token]] = 1
+    coverages = map(lambda x: sum(nonzeros[x]), nonzeros.keys())
+    print float(sum(coverages)) / len(coverages)
+
 def process_corpus(path):
     wordmap = get_wordmap(path, 10000)
+    check_sparsity(path, wordmap)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess corpus.")
