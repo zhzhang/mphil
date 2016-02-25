@@ -3,10 +3,15 @@
 
 import argparse
 import gzip
-import nltk
 import numpy as np
 import os
+import re
 import time
+
+STOPWORDS = set()
+with open('stopwords.txt', 'r') as f:
+    for line in f:
+        STOPWORDS.add(line.rstrip('\n'))
 
 def time_call(f):
     def wrapper(*args):
@@ -30,7 +35,7 @@ def tokenize(line):
 def filter_helper(word):
     if '<doc' in word or 'doc>' in word:
         return False
-    elif word in nltk.corpus.stopwords.words('english'):
+    elif word in STOPWORDS:
         return False
     elif '.\n' in word:
         return False
