@@ -10,6 +10,7 @@ def time_call(f):
         output = f(*args)
         time2 = time.time()
         print "Call to %s completed in %0.3f seconds" % (f.func_name, (time2 - time1))
+        return output
     return wrapper
 
 def open_file(path):
@@ -77,3 +78,4 @@ if __name__ == "__main__":
     parser.add_argument('path', type=str, nargs=1, help='path to corpus')
     args = parser.parse_args()
     process_corpus(args.path[0])
+
