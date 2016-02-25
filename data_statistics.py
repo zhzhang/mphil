@@ -1,5 +1,9 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import argparse
 import gzip
+import nltk
 import numpy as np
 import os
 import time
@@ -25,6 +29,10 @@ def tokenize(line):
 
 def filter_helper(word):
     if '<doc' in word or 'doc>' in word:
+        return False
+    elif word in nltk.corpus.stopwords.words('english'):
+        return False
+    elif '.\n' in word:
         return False
     else:
         return True
@@ -70,7 +78,7 @@ def check_sparsity(path, wordmap):
     print float(sum(coverages)) / len(coverages)
 
 def process_corpus(path):
-    wordmap = get_wordmap(path, 10000)
+    wordmap = get_wordmap(path, 2000)
     check_sparsity(path, wordmap)
 
 if __name__ == "__main__":
