@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import cPickle 
 import gzip
 import numpy as np
 import os
@@ -82,13 +83,20 @@ def check_sparsity(path, wordmap):
     coverages = map(lambda x: sum(nonzeros[x]), nonzeros.keys())
     print float(sum(coverages)) / len(coverages)
 
-def process_corpus(path):
-    wordmap = get_wordmap(path, 2000)
+def process_corpus(path, wordmap_path):
+    if wordmap_path == None:
+        wordmap = get_wordmap(path, 2000)
+        with open('wordmap.pkl', 'w+') as f:
+            cPickle.dump(wordmap, f)
+    else:
+        with open(wordmap_path, 'r') as f:
+            wordmap = cPickle.load(f)
     check_sparsity(path, wordmap)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess corpus.")
-    parser.add_argument('path', type=str, nargs=1, help='path to corpus')
+    parser.add_argument('path', type=str, help='path to corpus')
+    parser.add_argument('--wordmap', type=str, help='path to wordmap')
     args = parser.parse_args()
-    process_corpus(args.path[0])
+    process_corpus(args.path, args.wordmap)
 
