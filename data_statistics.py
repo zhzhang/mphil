@@ -3,19 +3,10 @@
 
 import argparse
 import cPickle 
-import gzip
 import numpy as np
 import os
-import re
-import string
 import time
-
-STOPWORDS = set()
-with open('stopwords.txt', 'r') as f:
-    for line in f:
-        STOPWORDS.add(line.rstrip('\n'))
-
-PUNC = re.compile('[%s]' % re.escape(string.punctuation))
+from preprocess import *
 
 def time_call(f):
     def wrapper(*args):
@@ -25,29 +16,6 @@ def time_call(f):
         print "Call to %s completed in %0.3f seconds" % (f.func_name, (time2 - time1))
         return output
     return wrapper
-
-def open_file(path):
-    if path.endswith('.gz'):
-        f = gzip.open(path, 'r')
-    else:
-        f = open(path, 'r')
-    return f
-
-def tokenize(line):
-    return map(lambda x: x.lower(), filter(filter_helper, line.split(' ')))
-
-def filter_helper(word):
-    tmp = PUNC.sub('', word)
-    if '<doc' in word or 'doc>' in word:
-        return False
-    elif word in STOPWORDS:
-        return False
-    elif '.\n' in word:
-        return False
-    elif len(tmp) == 0:
-        return False
-    else:
-        return True
 
 @time_call
 def get_wordmap(path, threshold):
