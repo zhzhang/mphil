@@ -7,12 +7,15 @@ import gzip
 import numpy as np
 import os
 import re
+import string
 import time
 
 STOPWORDS = set()
 with open('stopwords.txt', 'r') as f:
     for line in f:
         STOPWORDS.add(line.rstrip('\n'))
+
+PUNC = re.compile('[%s]' % re.escape(string.punctuation))
 
 def time_call(f):
     def wrapper(*args):
@@ -34,11 +37,14 @@ def tokenize(line):
     return map(lambda x: x.lower(), filter(filter_helper, line.split(' ')))
 
 def filter_helper(word):
+    tmp = PUNC.sub('', word)
     if '<doc' in word or 'doc>' in word:
         return False
     elif word in STOPWORDS:
         return False
     elif '.\n' in word:
+        return False
+    elif len(tmp) == 0:
         return False
     else:
         return True
