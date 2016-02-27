@@ -66,6 +66,7 @@ def generate_matrices(path, wordmap):
     matrices = {}
     for root, dirnames, filenames in os.walk(path):
         for i, filename in enumerate(filenames):
+            print "Processing %s file %d out of %d" % (root, i+1, len(filenames))
             f = open_file(os.path.join(root, filename))
             for line in f:
                 tokens = tokenize(line)
