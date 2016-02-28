@@ -1,0 +1,4 @@
+cat dog furry pet mammal
+fish snake scaly pet
+tree flower grass plant green
+cat pet fish
