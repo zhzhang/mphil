@@ -83,13 +83,14 @@ def generate_matrices(path, wordmap):
                             matrices[target][pair] += 1
                         else:
                             matrices[target][pair] = 1
+    return matrices
 
 def get_pairs(sentence):
     pairs = []
     for i in range(len(sentence)):
         for j in range(i+1, len(sentence)):
-            pairs.append((max(sentence[i], sentence[j]),\
-                min(sentence[i], sentence[j])))
+            pairs.append((min(sentence[i], sentence[j]),\
+                max(sentence[i], sentence[j])))
     return pairs
 
 def process_corpus(path, wordmap_path):
@@ -100,7 +101,9 @@ def process_corpus(path, wordmap_path):
     else:
         with open(wordmap_path, 'r') as f:
             wordmap = cPickle.load(f)
-    generate_matrices(path, wordmap)
+    matrices = generate_matrices(path, wordmap)
+    with open('matrices.pkl', 'w+') as f:
+        cPickle.dump(matrices, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Construct density matrices.")

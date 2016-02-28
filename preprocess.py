@@ -10,7 +10,7 @@ with open('stopwords.txt', 'r') as f:
     for line in f:
         STOPWORDS.add(line.rstrip('\n'))
 
-PUNC = re.compile('[%s]' % re.escape(string.punctuation))
+REMOVE = re.compile('[%s\n]' % re.escape(string.punctuation))
 
 def open_file(path):
     if path.endswith('.gz'):
@@ -20,17 +20,15 @@ def open_file(path):
     return f
 
 def tokenize(line):
-    return map(lambda x: x.lower(), filter(filter_helper, line.split(' ')))
+    tmp = map(lambda x: REMOVE.sub('', x).lower(), line.split(' '))
+    return filter(filter_helper, tmp)
 
 def filter_helper(word):
-    tmp = PUNC.sub('', word)
     if '<doc' in word or 'doc>' in word:
         return False
     elif word in STOPWORDS:
         return False
-    elif '.\n' in word:
-        return False
-    elif len(tmp) == 0:
+    elif len(word) == 0:
         return False
     else:
         return True
