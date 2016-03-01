@@ -6,6 +6,7 @@ import cPickle
 import numpy as np
 import os
 import time
+from multiprocessing import Pool, Manager
 from preprocess import *
 
 def time_call(f):
@@ -63,27 +64,51 @@ def check_sparsity(path, wordmap):
 
 @time_call
 def generate_matrices(path, wordmap):
-    matrices = {}
+    args = []
+    manager = Manager()
+    lock = manager.Lock()
+    matrices = manager.dict()
     for root, dirnames, filenames in os.walk(path):
-        for i, filename in enumerate(filenames):
-            print "Processing %s file %d out of %d" % (root, i+1, len(filenames))
-            f = open_file(os.path.join(root, filename))
-            for line in f:
-                tokens = tokenize(line)
-                sentence = []
-                for token in tokens:
-                    if token in wordmap:
-                        sentence.append(wordmap[token])
-                pairs = get_pairs(sentence)
-                for target in tokens:
-                    if not target in matrices:
-                        matrices[target] = {}
-                    for pair in pairs:
-                        if pair in matrices[target]:
-                            matrices[target][pair] += 1
-                        else:
-                            matrices[target][pair] = 1
+        for filename in filenames:
+            args.append((root, filename, matrices, lock, wordmap))
+    pool = Pool(processes=2)
+    pool.map(generate_matrices_worker, args)
     return matrices
+
+def generate_matrices_worker(args):
+    root, filename, total_matrices, lock, wordmap= args
+    print "Processing %s in %s" % (filename, root)
+    f = open_file(os.path.join(root, filename))
+    matrices = {}
+    for line in f:
+        tokens = tokenize(line)
+        sentence = []
+        for token in tokens:
+            if token in wordmap:
+                sentence.append(wordmap[token])
+        pairs = get_pairs(sentence)
+        for target in tokens:
+            if not target in matrices:
+                matrices[target] = {}
+            for pair in pairs:
+                if pair in matrices[target]:
+                    matrices[target][pair] += 1
+                else:
+                    matrices[target][pair] = 1
+    # Update the total matrix
+    lock.acquire()
+    for target in matrices:
+        word_matrix = matrices[target]
+        if target in total_matrices:
+            total_word_matrix = total_matrices[target]
+        else:
+            total_word_matrix = {}
+        for token in word_matrix:
+            if token in total_word_matrix:
+                total_word_matrix[token] += 1
+            else:
+                total_word_matrix[token] = 1
+    lock.release()
 
 def get_pairs(sentence):
     pairs = []
@@ -92,6 +117,9 @@ def get_pairs(sentence):
             pairs.append((min(sentence[i], sentence[j]),\
                 max(sentence[i], sentence[j])))
     return pairs
+
+def verify_matrix(output, correct):
+    pass
 
 def process_corpus(path, wordmap_path):
     if wordmap_path == None:
