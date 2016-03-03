@@ -63,7 +63,7 @@ def check_sparsity(path, wordmap):
     print float(sum(coverages)) / len(coverages)
 
 @time_call
-def generate_matrices(path, wordmap):
+def generate_matrices(path, wordmap, cores):
     args = []
     manager = Manager()
     lock = manager.Lock()
@@ -71,12 +71,12 @@ def generate_matrices(path, wordmap):
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
             args.append((root, filename, matrices, lock, wordmap))
-    pool = Pool(processes=2)
+    pool = Pool(processes=cores if not cores == None else 1)
     pool.map(generate_matrices_worker, args)
     return matrices
 
 def generate_matrices_worker(args):
-    root, filename, total_matrices, lock, wordmap= args
+    root, filename, total_matrices, lock, wordmap = args
     print "Processing %s in %s" % (filename, root)
     f = open_file(os.path.join(root, filename))
     matrices = {}
@@ -98,16 +98,17 @@ def generate_matrices_worker(args):
     # Update the total matrix
     lock.acquire()
     for target in matrices:
-        word_matrix = matrices[target]
+        target_matrix = matrices[target]
         if target in total_matrices:
-            total_word_matrix = total_matrices[target]
+            total_target_matrix = total_matrices[target]
         else:
-            total_word_matrix = {}
-        for token in word_matrix:
-            if token in total_word_matrix:
-                total_word_matrix[token] += 1
+            total_target_matrix = {}
+        for token in target_matrix:
+            if token in total_target_matrix:
+                total_target_matrix[token] += 1
             else:
-                total_word_matrix[token] = 1
+                total_target_matrix[token] = 1
+        total_matrices[target] = total_target_matrix
     lock.release()
 
 def get_pairs(sentence):
@@ -121,7 +122,7 @@ def get_pairs(sentence):
 def verify_matrix(output, correct):
     pass
 
-def process_corpus(path, wordmap_path):
+def process_corpus(path, wordmap_path, cores):
     if wordmap_path == None:
         wordmap = get_wordmap(path, 2000)
         with open('wordmap.pkl', 'w+') as f:
@@ -129,7 +130,7 @@ def process_corpus(path, wordmap_path):
     else:
         with open(wordmap_path, 'r') as f:
             wordmap = cPickle.load(f)
-    matrices = generate_matrices(path, wordmap)
+    matrices = generate_matrices(path, wordmap, cores)
     with open('matrices.pkl', 'w+') as f:
         cPickle.dump(matrices, f)
 
@@ -137,6 +138,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Construct density matrices.")
     parser.add_argument('path', type=str, help='path to corpus')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
+    parser.add_argument('--cores', type=int, help='number of cores to use')
     args = parser.parse_args()
-    process_corpus(args.path, args.wordmap)
+    process_corpus(args.path, args.wordmap, args.cores)
 
