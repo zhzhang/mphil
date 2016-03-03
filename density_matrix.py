@@ -73,7 +73,7 @@ def generate_matrices(path, wordmap, cores):
             args.append((root, filename, matrices, lock, wordmap))
     pool = Pool(processes=cores if not cores == None else 1)
     pool.map(generate_matrices_worker, args)
-    return matrices
+    return dict(matrices) # TODO: Find out if there's anything wrong with this.
 
 def generate_matrices_worker(args):
     root, filename, total_matrices, lock, wordmap = args
@@ -122,6 +122,18 @@ def get_pairs(sentence):
 def verify_matrix(output, correct):
     pass
 
+def print_matrices(matrices, wordmap):
+    reverse_wordmap = {}
+    for word in wordmap:
+        reverse_wordmap[wordmap[word]] = word
+    for target in matrices:
+        print "-----"
+        print "Target: %s" % target
+        for pair in matrices[target]:
+            print reverse_wordmap[pair[0]], reverse_wordmap[pair[1]],\
+              matrices[target][pair]
+
+
 def process_corpus(path, wordmap_path, cores):
     if wordmap_path == None:
         wordmap = get_wordmap(path, 2000)
@@ -131,6 +143,7 @@ def process_corpus(path, wordmap_path, cores):
         with open(wordmap_path, 'r') as f:
             wordmap = cPickle.load(f)
     matrices = generate_matrices(path, wordmap, cores)
+    #print_matrices(matrices, wordmap)
     with open('matrices.pkl', 'w+') as f:
         cPickle.dump(matrices, f)
 
