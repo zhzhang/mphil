@@ -87,6 +87,12 @@ def generate_matrices_worker(args):
             if token in wordmap:
                 sentence.append(wordmap[token])
         context = get_context(sentence)
+        # Get normalization constant for vectors.
+        normalizer = 0.0
+        for x in context:
+            normalizer += context[x]
+        normalizer -= 1
+        normalizer = normalizer * normalizer
         for target in tokens:
             if not targets == None and not target in targets:
                 continue
@@ -102,13 +108,13 @@ def generate_matrices_worker(args):
                     count_b = context[b]
                     if tid == a:
                         count_a -= 1
-                    if tid == b:
+                    elif tid == b:
                         count_b -= 1
                     if count_a > 0 and count_b > 0:
                         if (a,b) in matrices[target]:
-                            matrices[target][(a,b)] += count_a * count_b
+                            matrices[target][(a,b)] += count_a * count_b / normalizer
                         else:
-                            matrices[target][(a,b)] = count_a * count_b
+                            matrices[target][(a,b)] = count_a * count_b / normalizer
     # Update the total matrix
     lock.acquire()
     for target in matrices:
