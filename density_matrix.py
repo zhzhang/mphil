@@ -105,7 +105,10 @@ def generate_matrices_worker(args):
                     if tid == b:
                         count_b -= 1
                     if count_a > 0 and count_b > 0:
-                        matrices[target][(a,b)] = count_a * count_b
+                        if (a,b) in matrices[target]:
+                            matrices[target][(a,b)] += count_a * count_b
+                        else:
+                            matrices[target][(a,b)] = count_a * count_b
     # Update the total matrix
     lock.acquire()
     for target in matrices:
