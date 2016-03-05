@@ -86,17 +86,26 @@ def generate_matrices_worker(args):
         for token in tokens:
             if token in wordmap:
                 sentence.append(wordmap[token])
-        pairs = get_pairs(sentence)
+        context = get_context(sentence)
         for target in tokens:
             if not targets == None and not target in targets:
                 continue
             if not target in matrices:
                 matrices[target] = {}
-            for pair in pairs:
-                if pair in matrices[target]:
-                    matrices[target][pair] += 1
-                else:
-                    matrices[target][pair] = 1
+            keys = context.keys()
+            tid = wordmap[target] if target in wordmap else -1
+            for i in range(len(keys)):
+                for j in range(i, len(keys)):
+                    a = min(keys[i], keys[j])
+                    b = max(keys[i], keys[j])
+                    count_a = context[a]
+                    count_b = context[b]
+                    if tid == a:
+                        count_a -= 1
+                    if tid == b:
+                        count_b -= 1
+                    if count_a > 0 and count_b > 0:
+                        matrices[target][(a,b)] = count_a * count_b
     # Update the total matrix
     lock.acquire()
     for target in matrices:
@@ -107,19 +116,20 @@ def generate_matrices_worker(args):
             total_target_matrix = {}
         for token in target_matrix:
             if token in total_target_matrix:
-                total_target_matrix[token] += 1
+                total_target_matrix[token] += target_matrix[token]
             else:
-                total_target_matrix[token] = 1
+                total_target_matrix[token] = target_matrix[token]
         total_matrices[target] = total_target_matrix
     lock.release()
 
-def get_pairs(sentence):
-    pairs = [] #TODO: Words should not be included in their own contexts?
-    for i in range(len(sentence)):
-        for j in range(i+1, len(sentence)):
-            pairs.append((min(sentence[i], sentence[j]),\
-                max(sentence[i], sentence[j])))
-    return pairs
+def get_context(sentence):
+    word_counts = {}
+    for word in sentence:
+        if word in word_counts:
+            word_counts[word] += 1
+        else:
+            word_counts[word] = 1
+    return word_counts
 
 def verify_matrix(output, correct):
     pass
@@ -151,7 +161,7 @@ def process_corpus(path, wordmap_path, cores, targets):
             targets.add(a)
             targets.add(b)
     matrices = generate_matrices(path, wordmap, cores, targets)
-    #print_matrices(matrices, wordmap)
+    print_matrices(matrices, wordmap)
     with open('matrices.pkl', 'w+') as f:
         cPickle.dump(matrices, f)
 
