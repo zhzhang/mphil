@@ -108,7 +108,7 @@ def generate_matrices_worker(args):
                     count_b = context[b]
                     if tid == a:
                         count_a -= 1
-                    elif tid == b:
+                    if tid == b:
                         count_b -= 1
                     if count_a > 0 and count_b > 0:
                         if (a,b) in matrices[target]:
@@ -170,7 +170,7 @@ def process_corpus(path, wordmap_path, cores, targets):
             targets.add(a)
             targets.add(b)
     matrices = generate_matrices(path, wordmap, cores, targets)
-    print_matrices(matrices, wordmap)
+    #print_matrices(matrices, wordmap)
     with open('matrices.pkl', 'w+') as f:
         cPickle.dump(matrices, f)
 
