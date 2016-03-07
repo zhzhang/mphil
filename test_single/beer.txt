@@ -1,3 +1,0 @@
-pub beer beer beer lager lager
-pub beer
-pub lager lager

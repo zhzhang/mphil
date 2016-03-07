@@ -90,9 +90,7 @@ def generate_matrices_worker(args):
         # Get normalization constant for vectors.
         normalizer = 0.0
         for x in context:
-            normalizer += context[x]
-        normalizer -= 1
-        normalizer = normalizer * normalizer
+            normalizer += context[x] ** 2
         for target in tokens:
             if not targets == None and not target in targets:
                 continue
@@ -100,6 +98,11 @@ def generate_matrices_worker(args):
                 matrices[target] = {}
             keys = context.keys()
             tid = wordmap[target] if target in wordmap else -1
+            if tid in context:
+                final_normalizer = normalizer - context[tid] ** 2\
+                  + (context[tid] - 1) ** 2
+            else:
+                final_normalizer = normalizer
             for i in range(len(keys)):
                 for j in range(i, len(keys)):
                     a = min(keys[i], keys[j])
@@ -112,9 +115,11 @@ def generate_matrices_worker(args):
                         count_b -= 1
                     if count_a > 0 and count_b > 0:
                         if (a,b) in matrices[target]:
-                            matrices[target][(a,b)] += count_a * count_b / normalizer
+                            matrices[target][(a,b)] +=\
+                              count_a * count_b / final_normalizer
                         else:
-                            matrices[target][(a,b)] = count_a * count_b / normalizer
+                            matrices[target][(a,b)] =\
+                              count_a * count_b / final_normalizer
     # Update the total matrix
     lock.acquire()
     for target in matrices:
@@ -154,7 +159,7 @@ def print_matrices(matrices, wordmap):
             print reverse_wordmap[pair[0]], reverse_wordmap[pair[1]],\
               matrices[target][pair]
 
-def process_corpus(path, wordmap_path, cores, targets):
+def process_corpus(path, wordmap_path, cores, targets, verbose):
     if wordmap_path == None:
         wordmap = get_wordmap(path, 2000)
         with open('wordmap.pkl', 'w+') as f:
@@ -170,7 +175,8 @@ def process_corpus(path, wordmap_path, cores, targets):
             targets.add(a)
             targets.add(b)
     matrices = generate_matrices(path, wordmap, cores, targets)
-    #print_matrices(matrices, wordmap)
+    if verbose:
+        print_matrices(matrices, wordmap)
     with open('matrices.pkl', 'w+') as f:
         cPickle.dump(matrices, f)
 
@@ -180,6 +186,8 @@ if __name__ == "__main__":
     parser.add_argument('--targets', type=str, help='path to pickled target dict')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
     parser.add_argument('--cores', type=int, help='number of cores to use')
+    parser.add_argument('-v', help='verbose', action='store_true')
     args = parser.parse_args()
-    process_corpus(args.path, args.wordmap, args.cores, args.targets)
+    process_corpus(args.path, args.wordmap, args.cores, args.targets,\
+      args.v)
 
