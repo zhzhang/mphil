@@ -50,6 +50,8 @@ def generate_matrices(path, wordmap, cores, targets):
             args.append((root, filename, matrices, lock, wordmap, targets))
     pool = Pool(processes=cores if not cores == None else 1)
     pool.map(generate_matrices_worker, args)
+    pool.close()
+    pool.join()
     return dict(matrices) # TODO: Find out if there's anything wrong with this.
 
 def generate_matrices_worker(args):
