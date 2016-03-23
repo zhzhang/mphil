@@ -19,29 +19,6 @@ def time_call(f):
     return wrapper
 
 @time_call
-def get_wordmap(path, threshold):
-    wordcount = {}
-    for root, dirnames, filenames in os.walk(path):
-        for i, filename in enumerate(filenames):
-            print "Processing %s file %d out of %d" % (root, i+1, len(filenames))
-            f = open_file(os.path.join(root, filename))
-            for line in f:
-                tokens = tokenize(line)
-                for token in tokens:
-                    if not token in wordcount:
-                        wordcount[token] = 1
-                    else:
-                        wordcount[token] += 1
-    words = map(lambda x: (x, wordcount[x]), wordcount.keys())
-    words.sort(key=lambda x: x[1], reverse=True)
-    wordmap = {}
-    index = 0
-    while index < threshold and index < len(words):
-        wordmap[words[index][0]] = index
-        index += 1
-    return wordmap
-
-@time_call
 def check_sparsity(path, wordmap):
     nonzeros = {}
     for root, dirnames, filenames in os.walk(path):
