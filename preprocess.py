@@ -48,7 +48,7 @@ def filter_helper(word):
         return True
 
 @time_call
-def get_wordmap(path, threshold, targets):
+def get_wordmap(path, threshold, target_path):
     wordcount = {}
     for root, dirnames, filenames in os.walk(path):
         for i, filename in enumerate(filenames):
@@ -65,11 +65,13 @@ def get_wordmap(path, threshold, targets):
     words.sort(key=lambda x: x[1], reverse=True)
     wordmap = {}
     index = 0
-    if not targets == None:
+    targets = set()
+    if not target_path == None:
         f = open(targets, 'r')
-        targets = pickle.load(f)
-    else:
-        targets = {}
+        target_pairs = pickle.load(f)
+        for a, b in target_pairs:
+            targets.add(a)
+            targets.add(b)
     for i, tmp in enumerate(words):
         word, count = tmp
         if i < threshold or word in targets:
