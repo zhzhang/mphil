@@ -89,6 +89,7 @@ def process_file(args):
     root, filename, out, wordmap = args
     output = []
     path = os.path.join(root, filename)
+    print "Processing %s ..." % path
     f = open_file(path)
     for line in f:
         output_line = []
