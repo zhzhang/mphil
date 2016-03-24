@@ -72,10 +72,15 @@ def get_wordmap(path, threshold, target_path):
         for a, b in target_pairs:
             targets.add(a)
             targets.add(b)
-    for i, tmp in enumerate(words):
-        word, count = tmp
-        if i < threshold or word in targets:
-            wordmap[word] = i
+    index = 0
+    while index < threshold and index < len(words):
+        word, _ = words[index]
+        wordmap[word] = index
+        index += 1
+    for word in targets:
+        if not word in wordmap:
+            wordmap[word] = index
+            index += 1
     return wordmap
 
 def preprocess_corpus(path, out, cores, wordmap, targets):
