@@ -71,7 +71,7 @@ def get_wordmap(path, threshold):
     return wordmap
 
 def preprocess_corpus(path, out, cores, wordmap):
-    if wordmap == None
+    if wordmap == None:
         wordmap = get_wordmap(path, 2000)
     else:
         with open(wordmap, 'r') as f:
