@@ -48,7 +48,7 @@ def filter_helper(word):
         return True
 
 @time_call
-def get_wordmap(path, threshold):
+def get_wordmap(path, threshold, targets):
     wordcount = {}
     for root, dirnames, filenames in os.walk(path):
         for i, filename in enumerate(filenames):
@@ -61,18 +61,26 @@ def get_wordmap(path, threshold):
                         wordcount[token] = 1
                     else:
                         wordcount[token] += 1
-    words = map(lambda x: (x, wordcount[x]), wordcount.keys())
+    words = [(x, wordcount[x]) for x in wordcount.keys()]
     words.sort(key=lambda x: x[1], reverse=True)
     wordmap = {}
     index = 0
-    while index < threshold and index < len(words):
-        wordmap[words[index][0]] = index
-        index += 1
+    if not targets == None:
+        f = open(targets, 'r')
+        targets = pickle.load(f)
+    else:
+        targets = {}
+    for i, tmp in enumerate(words):
+        word, count = tmp
+        if i < threshold or word in targets:
+            wordmap[word] = i
     return wordmap
 
-def preprocess_corpus(path, out, cores, wordmap):
+def preprocess_corpus(path, out, cores, wordmap, targets):
     if wordmap == None:
-        wordmap = get_wordmap(path, 2000)
+        wordmap = get_wordmap(path, 2000, targets)
+        with open('wordmap.pkl', 'w+') as f:
+            pickle.dump(wordmap, f)
     else:
         with open(wordmap, 'r') as f:
             wordmap = pickle.load(f)
@@ -107,11 +115,12 @@ def process_file(args):
         pickle.dump(output, f)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Preprocess corpus.")
+    parser = argparse.ArgumentParser(description='Preprocess corpus.')
     parser.add_argument('path', type=str, help='path to corpus')
     parser.add_argument('out', type=str, help='path to output dir')
+    parser.add_argument('--targets', type=str, help='path to pickled target dict')
     parser.add_argument('--cores', type=int, help='number of cores to use')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
     args = parser.parse_args()
-    preprocess_corpus(args.path, args.out, args.cores, args.wordmap)
+    preprocess_corpus(args.path, args.out, args.cores, args.wordmap, args.targets)
 
