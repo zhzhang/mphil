@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import argparse
+import cPickle as pickle
 import gzip
 import os
 import re
 import string
 import time
+from multiprocessing import Pool
 
 STOPWORDS = set()
 with open('stopwords.txt', 'r') as f:
@@ -67,15 +70,42 @@ def get_wordmap(path, threshold):
         index += 1
     return wordmap
 
-def pickle_corpus(path, out):
+def preprocess_corpus(path, out, cores):
+    wordmap = get_wordmap(path, 2000)
+    args = []
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
-            os.path.join(root, filename)
+            args.append((root, filename, out, wordmap))
+    pool = Pool(processes=cores if not cores == None else 1)
+    pool.map(process_file, args)
+    pool.close()
+    pool.join()
+
+def process_file(args):
+    root, filename, out, wordmap = args
+    output = []
+    path = os.path.join(root, filename)
+    f = open_file(path)
+    for line in f:
+        output_line = []
+        tokens = tokenize(line)
+        for token in tokens:
+            if token in wordmap:
+                output_line.append(wordmap[token])
+        if len(output_line) > 0:
+            output.append(output_line)
+    newroot = os.path.join(out, *os.path.split(root)[1:])
+    if not os.path.isdir(newroot):
+        os.makedirs(newroot)
+    pre, _ = os.path.splitext(filename)
+    with open(os.path.join(newroot, pre + '.pkl'), 'w+') as f:
+        pickle.dump(output, f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Preprocess corpus.")
     parser.add_argument('path', type=str, help='path to corpus')
     parser.add_argument('out', type=str, help='path to output dir')
+    parser.add_argument('--cores', type=int, help='number of cores to use')
     args = parser.parse_args()
-    pickle_corpus(args.path, args.out)
+    preprocess_corpus(args.path, args.out, args.cores)
 
