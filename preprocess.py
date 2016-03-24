@@ -67,7 +67,7 @@ def get_wordmap(path, threshold, target_path):
     index = 0
     targets = set()
     if not target_path == None:
-        f = open(targets, 'r')
+        f = open(target_path, 'r')
         target_pairs = pickle.load(f)
         for a, b in target_pairs:
             targets.add(a)
