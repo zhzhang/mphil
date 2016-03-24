@@ -70,8 +70,12 @@ def get_wordmap(path, threshold):
         index += 1
     return wordmap
 
-def preprocess_corpus(path, out, cores):
-    wordmap = get_wordmap(path, 2000)
+def preprocess_corpus(path, out, cores, wordmap):
+    if wordmap == None
+        wordmap = get_wordmap(path, 2000)
+    else:
+        with open(wordmap, 'r') as f:
+            wordmap = pickle.load(f)
     args = []
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
@@ -106,6 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str, help='path to corpus')
     parser.add_argument('out', type=str, help='path to output dir')
     parser.add_argument('--cores', type=int, help='number of cores to use')
+    parser.add_argument('--wordmap', type=str, help='path to wordmap')
     args = parser.parse_args()
-    preprocess_corpus(args.path, args.out, args.cores)
+    preprocess_corpus(args.path, args.out, args.cores, args.wordmap)
 
