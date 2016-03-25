@@ -24,6 +24,8 @@ def generate_matrices(path, cores, targets):
     manager = Manager()
     lock = manager.Lock()
     matrices = manager.dict()
+    for target in targets:
+        matrices[target] = {}
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
             args.append((root, filename, matrices, lock, targets))
