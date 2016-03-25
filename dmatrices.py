@@ -2,12 +2,14 @@ import cPickle as pickle
 import numpy as np
 from scipy import linalg
 
-class Matrices(object):
+class DMatrices(object):
     def __init__(self, matrices, wordmap):
         matrices = open(matrices, 'r')
         self.matrices = pickle.load(matrices)
+        matrices.close()
         wordmap = open(wordmap, 'r')
         self.wordmap = pickle.load(wordmap)
+        wordmap.close()
         self.dimension = len(self.wordmap)
 
     # Computes representativeness from word x to word y.

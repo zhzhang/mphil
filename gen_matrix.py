@@ -36,6 +36,7 @@ def check_sparsity(path, wordmap):
                         nonzeros[target] = sentence
                     else:
                         nonzeros[target] = nonzeros[target].union(sentence)
+            f.close()
     coverages = map(lambda x: len(nonzeros[x]), nonzeros.keys())
     print float(sum(coverages)) / len(coverages)
 
