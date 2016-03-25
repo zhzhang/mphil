@@ -29,7 +29,6 @@ def generate_matrices(path, cores, targets):
     return matrices
 
 def process_file(root, filename, total_matrices, targets):
-    root, filename, total_matrices, targets = args
     print "Processing %s in %s" % (filename, root)
     time1 = time.time()
     f = open_file(os.path.join(root, filename))
