@@ -20,7 +20,8 @@ def process_bless(path, p):
             output.add(data)
     if p:
         print "Pickling..."
-        with open('bless.pkl', 'w+') as f:
+        base, ext = os.path.splitext(path)
+        with open(base + '.pkl', 'w+') as f:
             cPickle.dump(output, f)
     return output
 
