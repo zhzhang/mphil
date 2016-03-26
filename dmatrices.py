@@ -24,18 +24,33 @@ class DMatrices(object):
             y = self.wordmap[y]
         except KeyError:
             return -1
-        X = self._load_matrix(x)
-        Y = self._load_matrix(y)
-        r = self._compute_entropy(X, Y)
+        xmatrix, ymatrix = self._load_pair(x, y)
+        r = self._compute_entropy(xmatrix, ymatrix)
         return 1 / (1 + r)
 
-    def _load_matrix(self, target):
-        target = self.matrices[target]
-        output = np.zeros([self.dimension, self.dimension])
+    def _load_pair(self, x, y):
+        x = self.matrices[x]
+        y = self.matrices[y]
+        basis = set()
+        for a,b in x.keys() + y.keys():
+            basis.add(a)
+            basis.add(b)
+        basis = list(basis)
+        basis.sort()
+        basis_map = {}
+        for i, b in enumerate(basis):
+            basis_map[b] = i
+        return self._get_matrix(x, basis_map),\
+          self._get_matrix(y, basis_map)
+
+    def _get_matrix(self, target, basis_map):
+        output = np.zeros([len(basis_map), len(basis_map)])
         for pair in target:
             x,y = pair
-            output[x,y] = target[pair]
-            output[y,x] = target[pair]
+            x_ind = basis_map[x]
+            y_ind = basis_map[y]
+            output[x_ind,y_ind] = target[pair]
+            output[y_ind,x_ind] = target[pair]
         return output / linalg.norm(output)
 
     def _compute_entropy(self, X, Y):
