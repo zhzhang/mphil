@@ -3,6 +3,8 @@ import numpy as np
 import time
 from scipy import linalg
 
+ZERO_THRESH = 1e-12
+
 class DMatrices(object):
     def __init__(self, matrices, wordmap):
         print "Loading matrices at %s" % matrices
@@ -24,8 +26,12 @@ class DMatrices(object):
             y = self.wordmap[y]
         except KeyError:
             return -1
+        t = time.time()
         xmatrix, ymatrix = self._load_pair(x, y)
+        print "Pair loaded in %0.3f seconds" % (time.time() - t)
+        t = time.time()
         r = self._compute_entropy(xmatrix, ymatrix)
+        print "Entropy computed in %0.3f seconds" % (time.time() - t)
         return 1 / (1 + r)
 
     def _load_pair(self, x, y):
@@ -54,11 +60,25 @@ class DMatrices(object):
         return output / linalg.norm(output)
 
     def _compute_entropy(self, X, Y):
-        logX = linalg.logm(X)
-        logY = linalg.logm(Y)
-        a = np.trace(X * logX)
-        b = np.trace(X * logY)
-        return a - b
+        eigx, vecx = np.linalg.eig(X)
+        eigy, vecy = np.linalg.eig(Y)
+        eigx = np.real(eigx)
+        eigy = np.real(eigy)
+        tracex = 0.0
+        for lamx in eigx:
+            if not lamx < ZERO_THRESH:
+                tracex += lamx * np.log(lamx)
+        tracey = 0.0
+        for i,lamy in enumerate(eigy):
+            v = vecy[:,i]
+            tmp = np.real(np.dot(np.dot(X,v), v))
+            if tmp < ZERO_THRESH:
+                continue
+            elif lamy < ZERO_THRESH:
+                return float('inf')
+            else:
+                tracey += tmp * np.log(lamy)
+        return tracex - tracey
 
 if __name__ == '__main__':
     pass

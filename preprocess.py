@@ -77,10 +77,6 @@ def get_wordmap(path, threshold, target_path):
         word, _ = words[index]
         wordmap[word] = index
         index += 1
-    for word in targets:
-        if not word in wordmap:
-            wordmap[word] = index
-            index += 1
     return wordmap
 
 def preprocess_corpus(path, out, cores, wordmap, targets):
