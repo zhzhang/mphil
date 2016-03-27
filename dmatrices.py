@@ -34,18 +34,28 @@ class DMatrices(object):
         print "Entropy computed in %0.3f seconds" % (time.time() - t)
         return 1 / (1 + r)
 
-    def _load_pair(self, x, y):
-        x = self.matrices[x]
-        y = self.matrices[y]
+    def _get_basis(self, *args):
         basis = set()
-        for a,b in x.keys() + y.keys():
-            basis.add(a)
-            basis.add(b)
+        for target in args:
+            for a,b in target.keys():
+                basis.add(a)
+                basis.add(b)
         basis = list(basis)
         basis.sort()
         basis_map = {}
         for i, b in enumerate(basis):
             basis_map[b] = i
+        return basis_map
+
+    def _load_single(self, x):
+        x = self.matrices[x]
+        basis_map = self._get_basis(x)
+        return self._get_matrix(x, basis_map)
+
+    def _load_pair(self, x, y):
+        x = self.matrices[x]
+        y = self.matrices[y]
+        basis_map = self._get_basis(x,y)
         return self._get_matrix(x, basis_map),\
           self._get_matrix(y, basis_map)
 

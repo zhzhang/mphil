@@ -96,7 +96,7 @@ def get_context(sentence):
             word_counts[word] = 1
     return word_counts
 
-def process_corpus(path, wordmap_path, cores, targets, verbose):
+def process_corpus(path, wordmap_path, cores, targets, verbose, out='matrices.pkl'):
     if not targets == None:
         with open(wordmap_path, 'r') as f:
             wordmap = pickle.load(f)
@@ -109,7 +109,7 @@ def process_corpus(path, wordmap_path, cores, targets, verbose):
     matrices = generate_matrices(path, cores, targets)
     if verbose:
         print_matrices(matrices, wordmap)
-    with open('matrices.pkl', 'w+') as f:
+    with open(out, 'w+') as f:
         pickle.dump(matrices, f)
 
 if __name__ == "__main__":
