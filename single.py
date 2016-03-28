@@ -18,24 +18,24 @@ def time_call(f):
     return wrapper
 
 @time_call
-def generate_matrices(path, cores, targets):
+def generate_matrices(path, cores, targets, wordmap):
     args = []
     matrices = {}
     for target in targets:
         matrices[target] = {}
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
-            process_file(root, filename, matrices, targets)
+            process_file(root, filename, matrices, targets, wordmap['_d'])
     return matrices
 
-def process_file(root, filename, total_matrices, targets):
+def process_file(root, filename, total_matrices, targets, dim):
     print "Processing %s in %s" % (filename, root)
     time1 = time.time()
     f = open_file(os.path.join(root, filename))
     f = pickle.load(f)
     matrices = {}
     for line in f:
-        context = get_context(line)
+        context = get_context(line, dim)
         # Get normalization constant for vectors.
         normalizer = 0.0
         for x in context:
@@ -87,10 +87,12 @@ def process_file(root, filename, total_matrices, targets):
     time2 = time.time()
     print "Merging %s in %s completed in %0.3f seconds" % (filename, root, (time2 - time1))
 
-def get_context(sentence):
+def get_context(sentence, dim):
     word_counts = {}
     for word in sentence:
-        if word in word_counts:
+        if word >= dim:
+            continue
+        elif word in word_counts:
             word_counts[word] += 1
         else:
             word_counts[word] = 1
@@ -106,7 +108,7 @@ def process_corpus(path, wordmap_path, cores, targets, verbose, out='matrices.pk
         for a, b in target_pairs:
             targets.add(wordmap[a])
             targets.add(wordmap[b])
-    matrices = generate_matrices(path, cores, targets)
+    matrices = generate_matrices(path, cores, targets, wordmap)
     if verbose:
         print_matrices(matrices, wordmap)
     with open(out, 'w+') as f:

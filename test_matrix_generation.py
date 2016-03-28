@@ -40,8 +40,8 @@ with open('tmp_test_dir/test_file2.pkl', 'w+') as f:
     pickle.dump(file2,f)
 
 testdm = {}
-process_file('tmp_test_dir', 'test_file1.pkl', testdm, [0,1,2,3])
-process_file('tmp_test_dir', 'test_file2.pkl', testdm, [0,1,2,3])
+process_file('tmp_test_dir', 'test_file1.pkl', testdm, [0,1,2,3], 4)
+process_file('tmp_test_dir', 'test_file2.pkl', testdm, [0,1,2,3], 4)
 
 with open('tmp_test_dir/matrices.pkl', 'w+') as f:
     pickle.dump(testdm, f)
