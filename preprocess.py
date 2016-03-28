@@ -48,7 +48,7 @@ def filter_helper(word):
         return True
 
 @time_call
-def get_wordmap(path, threshold):
+def get_wordmap(path, threshold, targets):
     wordcount = {}
     for root, dirnames, filenames in os.walk(path):
         for i, filename in enumerate(filenames):
@@ -69,11 +69,27 @@ def get_wordmap(path, threshold):
         word, _ = words[index]
         wordmap[word] = index
         index += 1
+    targets = get_targets(targets)
+    for target in targets:
+        if not target in wordmap:
+            wordmap[target] = index
+            index += 1
+    wordmap['_d'] = threshold
     return wordmap
 
-def preprocess_corpus(path, out, cores, wordmap, dim=2000):
+# Retrieve target words.
+def get_targets(targets):
+    with open(targets, 'r') as f:
+        targets = pickle.load(f)
+    output = set()
+    for a,b in targets:
+        output.add(a)
+        output.add(b)
+    return output
+
+def preprocess_corpus(path, out, cores, wordmap, targets, dim=2000):
     if wordmap == None:
-        wordmap = get_wordmap(path, dim)
+        wordmap = get_wordmap(path, dim, targets)
         with open('wordmap.pkl', 'w+') as f:
             pickle.dump(wordmap, f)
     else:
@@ -115,8 +131,10 @@ if __name__ == '__main__':
     parser.add_argument('out', type=str, help='path to output dir')
     parser.add_argument('--cores', type=int, help='number of cores to use')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
+    parser.add_argument('--targets', type=str, help='path to pickled target word pairs')
     parser.add_argument('--dim', type=int,\
       help='number of most frequently seen words to keep', default=2000)
     args = parser.parse_args()
-    preprocess_corpus(args.path, args.out, args.cores, args.wordmap, dim=args.dim)
+    preprocess_corpus(args.path, args.out, args.cores, args.wordmap,\
+      args.targets, dim=args.dim)
 
