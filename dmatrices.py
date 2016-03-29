@@ -26,9 +26,13 @@ class DMatrices(object):
             y = self.wordmap[y]
         except KeyError:
             return -1
-        t = time.time()
         xmatrix, ymatrix = self._load_pair(x, y)
-        print "Pair loaded in %0.3f seconds" % (time.time() - t)
+        if xmatrix == None:
+            print "Word not found in matrices: %s" % x
+        if ymatrix == None:
+            print "Word not found in matrices: %s" % y
+        if xmatrix == None or ymatrix == None:
+            return None
         t = time.time()
         r = self._compute_entropy(xmatrix, ymatrix)
         print "Entropy computed in %0.3f seconds" % (time.time() - t)
@@ -60,6 +64,8 @@ class DMatrices(object):
           self._get_matrix(y, basis_map)
 
     def _get_matrix(self, target, basis_map):
+        if len(target) == 0:
+            return None
         output = np.zeros([len(basis_map), len(basis_map)])
         for pair in target:
             x,y = pair
