@@ -84,10 +84,10 @@ class DMatrices(object):
         for lamx in eigx:
             if not lamx < ZERO_THRESH:
                 tracex += lamx * np.log(lamx)
+        XV = np.dot(X,vecy)
         tracey = 0.0
         for i,lamy in enumerate(eigy):
-            v = vecy[:,i]
-            tmp = np.real(np.dot(np.dot(X,v), v))
+            tmp = np.real(np.dot(XV[:,i], vecy[:,i]))
             if tmp < ZERO_THRESH:
                 continue
             elif lamy < ZERO_THRESH:
