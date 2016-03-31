@@ -8,16 +8,18 @@ from preprocess import *
 
 def parse_line(line):
     # Concept, class, relation, relatum
-    (con, cla , rel, relu) = line.split('\t')
+    (con, cla, rel, relu) = line.split('\t')
     con = con.split('-')[0]
-    return (con, cla)
+    relu = relu.split('-')[0]
+    return (con, relu, cla, rel)
 
 def process_bless(path, p):
-    output = set()
+    output = {}
     with open(path, 'r') as f:
         for line in f:
-            data = parse_line(line)
-            output.add(data)
+            con, relu, cla, rel = parse_line(line)
+            if rel == 'hyper':
+                output[(con, relu)] = (rel, cla)
     if p:
         print "Pickling..."
         base, ext = os.path.splitext(path)
