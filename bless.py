@@ -6,10 +6,7 @@ def process_bless(path, matrices, wordmap):
     with open(path, 'r') as f:
         bless = pickle.load(f)
     dm = DMatrices(matrices, wordmap)
-    for x, y in bless:
-        rxy = dm.repres(x,y)
-        ryx = dm.repres(y,x)
-        print x,y,rxy,ryx
+    rxy = dm.repres(bless)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate on BLESS.")
