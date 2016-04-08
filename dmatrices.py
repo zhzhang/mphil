@@ -29,6 +29,8 @@ class DMatrices(object):
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         for word in words:
+            if os.path.exists(os.path.join(eigen_path, word + '.pkl')):
+                continue
             try:
                 word_id = self.wordmap[word]
             except KeyError:
@@ -37,34 +39,23 @@ class DMatrices(object):
             if matrix == None:
                 continue
             args.append((word, matrix, basis_map, eigen_path))
+        if len(args) == 0:
+            return
         pool.map(get_eigenvectors_worker, args)
         pool.close()
         pool.join()
 
     def repres(self, pairs):
+        # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
             words.add(a)
             words.add(b)
         self.get_eigenvectors(words)
-        """
-        try:
-            x = self.wordmap[x]
-            y = self.wordmap[y]
-        except KeyError:
-            return -1
-        xmatrix, ymatrix = self._load_pair(x, y)
-        if xmatrix == None:
-            print "Word not found in matrices: %s" % x
-        if ymatrix == None:
-            print "Word not found in matrices: %s" % y
-        if xmatrix == None or ymatrix == None:
-            return None
-        t = time.time()
-        r = self._compute_entropy(xmatrix, ymatrix)
+        for a,b in pairs:
+            rab, rba = self._compute_rel_ent(a,b)
         print "Entropy computed in %0.3f seconds" % (time.time() - t)
         return 1 / (1 + r)
-        """
 
     def _get_basis(self, *args):
         basis = set()
@@ -96,11 +87,19 @@ class DMatrices(object):
             output[y_ind,x_ind] = target[pair]
         return output / linalg.norm(output)
 
-    def _compute_entropy(self, X, Y):
-        eigx, vecx = np.linalg.eig(X)
-        eigy, vecy = np.linalg.eig(Y)
+    def _load_eigen(self, word):
+        eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
+        with open(os.path.join(eigen_path, word + '.pkl'), 'r') as f:
+            return pickle.load(f)
+
+    def _compute_rel_ent(self, word_x, word_y):
+        eigx, vecx, basis_map_x = self._load_eigen(word_x)
+        eigy, vecy, basis_map_y = self._load_eigen(word_y)
         eigx = np.real(eigx)
         eigy = np.real(eigy)
+        print len(basis_map_x)
+        print len(basis_map_y)
+        """
         tracex = 0.0
         for lamx in eigx:
             if not lamx < ZERO_THRESH:
@@ -116,6 +115,7 @@ class DMatrices(object):
             else:
                 tracey += tmp * np.log(lamy)
         return tracex - tracey
+        """
 
 def get_eigenvectors_worker(args):
     word, matrix, basis_map, eigen_path = args
