@@ -12,9 +12,9 @@ class DMatrices(object):
         print "Loading matrices at %s" % matrices_path
         t = time.time()
         self.matrices_path = matrices_path
-        matrices = open(matrices_path, 'r')
-        self.matrices = pickle.load(matrices)
-        matrices.close()
+        #matrices = open(matrices_path, 'r')
+        #self.matrices = pickle.load(matrices)
+        #matrices.close()
         print "Matrices loaded in %0.3f seconds" % (time.time() - t)
         print "Loading wordmap at %s" % wordmap 
         wordmap = open(wordmap, 'r')
@@ -45,17 +45,24 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def repres(self, pairs):
+    def repres(self, pairs, num_cores=1):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
             words.add(a)
             words.add(b)
         self.get_eigenvectors(words)
+        pool = Pool(processes=num_cores)
+        args = []
+        eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         for a,b in pairs:
-            rab, rba = self._compute_rel_ent(a,b)
-        print "Entropy computed in %0.3f seconds" % (time.time() - t)
-        return 1 / (1 + r)
+            #rab, rba = self._compute_rel_ent(a,b)
+            args.append((a, b, eigen_path))
+        results = pool.map(_compute_rel_ent, args)
+        pool.close()
+        pool.join()
+        print sum(results)
+        print len(results)
 
     def _get_basis(self, *args):
         basis = set()
@@ -87,35 +94,34 @@ class DMatrices(object):
             output[y_ind,x_ind] = target[pair]
         return output / linalg.norm(output)
 
-    def _load_eigen(self, word):
-        eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
-        with open(os.path.join(eigen_path, word + '.pkl'), 'r') as f:
-            return pickle.load(f)
+def _load_eigen(word, eigen_path):
+    with open(os.path.join(eigen_path, word + '.pkl'), 'r') as f:
+        return pickle.load(f)
 
-    def _compute_rel_ent(self, word_x, word_y):
-        eigx, vecx, basis_map_x = self._load_eigen(word_x)
-        eigy, vecy, basis_map_y = self._load_eigen(word_y)
-        eigx = np.real(eigx)
-        eigy = np.real(eigy)
-        print len(basis_map_x)
-        print len(basis_map_y)
-        """
-        tracex = 0.0
-        for lamx in eigx:
-            if not lamx < ZERO_THRESH:
-                tracex += lamx * np.log(lamx)
-        VXV = np.dot(vecy.T, np.dot(X,vecy))
-        tracey = 0.0
-        for i, lamy in enumerate(eigy):
-            tmp = VXV[i,i]
-            if tmp < ZERO_THRESH:
-                continue
-            elif lamy < ZERO_THRESH:
-                return float('inf')
-            else:
-                tracey += tmp * np.log(lamy)
-        return tracex - tracey
-        """
+def _compute_rel_ent(args):
+    (word_x, word_y, eigen_path) = args
+    eigx, vecx, basis_map_x = _load_eigen(word_x, eigen_path)
+    eigy, vecy, basis_map_y = _load_eigen(word_y, eigen_path)
+    eigx = np.real(eigx)
+    eigy = np.real(eigy)
+    return (1 if len(basis_map_x) == len(basis_map_y) else 0)
+    """
+    tracex = 0.0
+    for lamx in eigx:
+        if not lamx < ZERO_THRESH:
+            tracex += lamx * np.log(lamx)
+    VXV = np.dot(vecy.T, np.dot(X,vecy))
+    tracey = 0.0
+    for i, lamy in enumerate(eigy):
+        tmp = VXV[i,i]
+        if tmp < ZERO_THRESH:
+            continue
+        elif lamy < ZERO_THRESH:
+            return float('inf')
+        else:
+            tracey += tmp * np.log(lamy)
+    return tracex - tracey
+    """
 
 def get_eigenvectors_worker(args):
     word, matrix, basis_map, eigen_path = args
