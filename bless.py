@@ -6,7 +6,6 @@ from dmatrices import DMatrices
 def process_bless(path, matrices, wordmap, num_cores):
     with open(path, 'r') as f:
         bless = pickle.load(f)
-    print len(bless)
     dm = DMatrices(matrices, wordmap)
     words = set()
     for a,b in bless:

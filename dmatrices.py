@@ -12,9 +12,9 @@ class DMatrices(object):
         print "Loading matrices at %s" % matrices_path
         t = time.time()
         self.matrices_path = matrices_path
-        #matrices = open(matrices_path, 'r')
-        #self.matrices = pickle.load(matrices)
-        #matrices.close()
+        matrices = open(matrices_path, 'r')
+        self.matrices = pickle.load(matrices)
+        matrices.close()
         print "Matrices loaded in %0.3f seconds" % (time.time() - t)
         print "Loading wordmap at %s" % wordmap 
         wordmap = open(wordmap, 'r')
@@ -61,8 +61,11 @@ class DMatrices(object):
         results = pool.map(_compute_rel_ent, args)
         pool.close()
         pool.join()
-        print sum(results)
-        print len(results)
+        for i, pair in enumerate(results):
+            if not pair == None:
+                print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
+            else:
+                print args[i][0], args[i][1]
 
     def _get_basis(self, *args):
         basis = set()
@@ -100,28 +103,58 @@ def _load_eigen(word, eigen_path):
 
 def _compute_rel_ent(args):
     (word_x, word_y, eigen_path) = args
+    pathx = os.path.join(eigen_path, word_x + '.pkl')
+    pathy = os.path.join(eigen_path, word_y + '.pkl')
+    if not (os.path.exists(pathx) and os.path.exists(pathy)):
+        return None
     eigx, vecx, basis_map_x = _load_eigen(word_x, eigen_path)
     eigy, vecy, basis_map_y = _load_eigen(word_y, eigen_path)
     eigx = np.real(eigx)
     eigy = np.real(eigy)
-    return (1 if len(basis_map_x) == len(basis_map_y) else 0)
-    """
-    tracex = 0.0
-    for lamx in eigx:
-        if not lamx < ZERO_THRESH:
-            tracex += lamx * np.log(lamx)
-    VXV = np.dot(vecy.T, np.dot(X,vecy))
-    tracey = 0.0
-    for i, lamy in enumerate(eigy):
-        tmp = VXV[i,i]
-        if tmp < ZERO_THRESH:
+    vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
+    trxx = sum([lam_x * np.log(lam_x) if lam_x > ZERO_THRESH else 0.0 for lam_x in eigx])
+    tryy = sum([lam_y * np.log(lam_y) if lam_y > ZERO_THRESH else 0.0 for lam_y in eigy])
+    trxy, tryx = _tr_log(vecx, eigx, vecy, eigy)
+    return (trxx - trxy, tryy - tryx)
+
+def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
+    new_basis_map = basis_map_x.copy()
+    index = max(new_basis_map.values())
+    for key in basis_map_y:
+        if not key in new_basis_map:
+            index += 1
+            new_basis_map[key] = index
+    new_vecx = np.zeros([len(new_basis_map), vecx.shape[0]])
+    new_vecx[0:vecx.shape[0], 0:vecx.shape[0]] = vecx
+    new_vecy = np.zeros([len(new_basis_map), vecy.shape[0]])
+    for key in basis_map_y:
+        new_ind = new_basis_map[key]
+        new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
+    return new_vecx, new_vecy
+
+def _tr_log(A, eiga, B, eigb):
+    AtB = np.dot(A.T, B)
+    tmp_ab = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
+    tmp_ba = np.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
+    output_ab = 0.0
+    for i,lam_b in enumerate(eigb):
+        if np.absolute(tmp_ab[i]) < ZERO_THRESH:
             continue
-        elif lamy < ZERO_THRESH:
-            return float('inf')
+        elif np.absolute(lam_b) < ZERO_THRESH:
+            output_ab = -float('inf')
+            break
         else:
-            tracey += tmp * np.log(lamy)
-    return tracex - tracey
-    """
+            output_ab += tmp_ab[i] * np.log(lam_b)
+    output_ba = 0.0
+    for i,lam_a in enumerate(eiga):
+        if np.absolute(tmp_ba[i]) < ZERO_THRESH:
+            continue
+        elif np.absolute(lam_a) < ZERO_THRESH:
+            return output_ab, -float('inf')
+        else:
+            output_ba += tmp_ba[i] * np.log(lam_a)
+    return output_ab, output_ba
+
 
 def get_eigenvectors_worker(args):
     word, matrix, basis_map, eigen_path = args
