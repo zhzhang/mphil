@@ -6,6 +6,7 @@ from dmatrices import DMatrices
 def process_bless(path, matrices, wordmap, num_cores):
     with open(path, 'r') as f:
         bless = pickle.load(f)
+    print len(bless)
     dm = DMatrices(matrices, wordmap)
     words = set()
     for a,b in bless:
@@ -14,6 +15,9 @@ def process_bless(path, matrices, wordmap, num_cores):
     t = time.time()
     dm.get_eigenvectors(words, num_cores=num_cores)
     print "Eigenvectors computed in %d seconds" % (time.time() - t)
+    t = time.time()
+    dm.repres(bless, num_cores=num_cores)
+    print "Processed pairs in %d seconds" % (time.time() - t)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate on BLESS.")
