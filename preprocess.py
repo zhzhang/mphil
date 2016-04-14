@@ -18,6 +18,7 @@ with open('stopwords.txt', 'r') as f:
 REMOVE = re.compile('[%s\n]' % re.escape(string.punctuation))
 
 def time_call(f):
+    """Decorator for timing function calls."""
     def wrapper(*args):
         time1 = time.time()
         output = f(*args)
@@ -27,6 +28,7 @@ def time_call(f):
     return wrapper
 
 def open_file(path):
+    """File opener for plaintext or gz, given a path."""
     if path.endswith('.gz'):
         f = gzip.open(path, 'r')
     else:
@@ -35,9 +37,9 @@ def open_file(path):
 
 def tokenize(line):
     tmp = map(lambda x: REMOVE.sub('', x).lower(), line.split(' '))
-    return filter(filter_helper, tmp)
+    return filter(_filter_helper, tmp)
 
-def filter_helper(word):
+def _filter_helper(word):
     if '<doc' in word or 'doc>' in word:
         return False
     elif word in STOPWORDS:
@@ -69,12 +71,14 @@ def get_wordmap(path, threshold, targets):
         word, _ = words[index]
         wordmap[word] = index
         index += 1
+    wordmap['_d'] = threshold
+    if targets == None:
+        return wordmap
     targets = get_targets(targets)
     for target in targets:
         if not target in wordmap:
             wordmap[target] = index
             index += 1
-    wordmap['_d'] = threshold
     return wordmap
 
 # Retrieve target words.
@@ -130,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str, help='path to corpus')
     parser.add_argument('out', type=str, help='path to output dir')
     parser.add_argument('--cores', type=int, help='number of cores to use')
-    parser.add_argument('--wordmap', type=str, help='path to wordmap')
+    parser.add_argument('--wordmap', type=str, help='path to wordmap if precomputed')
     parser.add_argument('--targets', type=str, help='path to pickled target word pairs')
     parser.add_argument('--dim', type=int,\
       help='number of most frequently seen words to keep', default=2000)

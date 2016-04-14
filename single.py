@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import pickle as pickle
+import cPickle as pickle
 import numpy as np
 import os
 import time
@@ -114,14 +114,46 @@ def process_corpus(path, wordmap_path, cores, targets, verbose, out='matrices.pk
     with open(out, 'w+') as f:
         pickle.dump(matrices, f)
 
+def get_statistics(path, wordmap, dim):
+    if wordmap == None:
+        wordmap = get_wordmap(path, dim, None)
+    else:
+        with open(wordmap, 'r') as f:
+            wordmap = pickle.load(f)
+    get_unique_contexts(path, wordmap, dim)
+
+def get_unique_contexts(path, wordmap, dim):
+    contexts = {}
+    total = 0
+    for root, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            path = os.path.join(root, filename)
+            print "Processing %s ..." % path
+            f = open_file(path)
+            for line in f:
+                context = get_context(line, dim)
+                c = tuple([(x, context[x]) for x in sorted(context)])
+                if c in contexts:
+                    contexts[c] += 1
+                else:
+                    contexts[c] = 1
+    with open('unique_contexts.pkl', 'w+') as f:
+        pickle.dump((contexts,total), f)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Construct density matrices.")
     parser.add_argument('path', type=str, help='path to corpus')
+    parser.add_argument('--out', type=str, help='path to output dir')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
     parser.add_argument('--targets', type=str, help='path to pickled target dict')
     parser.add_argument('--cores', type=int, help='number of cores to use')
     parser.add_argument('-v', help='verbose', action='store_true')
+    parser.add_argument('-s', action='store_true',\
+      help='flag to retrieve corpus statistics instead of preprocessing the corpus')
     args = parser.parse_args()
-    process_corpus(args.path, args.wordmap, args.cores, args.targets,\
-      args.v)
+    if not args.out == None:
+        process_corpus(args.path, args.wordmap, args.cores, args.targets,\
+          args.v)
+    elif args.s:
+        get_statistics(args.path, args.wordmap, args.dim)
 
