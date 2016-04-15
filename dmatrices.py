@@ -8,7 +8,7 @@ from multiprocessing import Pool
 ZERO_THRESH = 1e-12
 
 class DMatrices(object):
-    def __init__(self, matrices_path, wordmap):
+    def __init__(self, matrices_path, wordmap, test=False):
         print "Loading matrices at %s" % matrices_path
         t = time.time()
         self.matrices_path = matrices_path
@@ -41,7 +41,7 @@ class DMatrices(object):
             args.append((word, matrix, basis_map, eigen_path))
         if len(args) == 0:
             return
-        pool.map(get_eigenvectors_worker, args)
+        pool.map(_get_eigenvectors_worker, args)
         pool.close()
         pool.join()
 
@@ -56,9 +56,8 @@ class DMatrices(object):
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         for a,b in pairs:
-            #rab, rba = self._compute_rel_ent(a,b)
             args.append((a, b, eigen_path))
-        results = pool.map(_compute_rel_ent, args)
+        results = pool.map(_compute_rel_ent_worker, args)
         pool.close()
         pool.join()
         for i, pair in enumerate(results):
@@ -95,13 +94,13 @@ class DMatrices(object):
             y_ind = basis_map[y]
             output[x_ind,y_ind] = target[pair]
             output[y_ind,x_ind] = target[pair]
-        return output / linalg.norm(output)
+        return output / np.trace(output)
 
 def _load_eigen(word, eigen_path):
     with open(os.path.join(eigen_path, word + '.pkl'), 'r') as f:
         return pickle.load(f)
 
-def _compute_rel_ent(args):
+def _compute_rel_ent_worker(args):
     (word_x, word_y, eigen_path) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
@@ -112,10 +111,7 @@ def _compute_rel_ent(args):
     eigx = np.real(eigx)
     eigy = np.real(eigy)
     vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
-    trxx = sum([lam_x * np.log(lam_x) if lam_x > ZERO_THRESH else 0.0 for lam_x in eigx])
-    tryy = sum([lam_y * np.log(lam_y) if lam_y > ZERO_THRESH else 0.0 for lam_y in eigy])
-    trxy, tryx = _tr_log(vecx, eigx, vecy, eigy)
-    return (trxx - trxy, tryy - tryx)
+    return compute_rel_ent(eigx, vecx, eigy, vecy)
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     new_basis_map = basis_map_x.copy()
@@ -131,6 +127,12 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
         new_ind = new_basis_map[key]
         new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
     return new_vecx, new_vecy
+
+def compute_rel_ent(eigx, vecx, eigy, vecy):
+    trxx = sum([lam_x * np.log(lam_x) if lam_x > ZERO_THRESH else 0.0 for lam_x in eigx])
+    tryy = sum([lam_y * np.log(lam_y) if lam_y > ZERO_THRESH else 0.0 for lam_y in eigy])
+    trxy, tryx = _tr_log(vecx, eigx, vecy, eigy)
+    return (trxx - trxy, tryy - tryx)
 
 def _tr_log(A, eiga, B, eigb):
     AtB = np.dot(A.T, B)
@@ -156,7 +158,7 @@ def _tr_log(A, eiga, B, eigb):
     return output_ab, output_ba
 
 
-def get_eigenvectors_worker(args):
+def _get_eigenvectors_worker(args):
     word, matrix, basis_map, eigen_path = args
     print "Computing eigenvectors for: %s" % word
     eigx, vecx = np.linalg.eig(matrix)
