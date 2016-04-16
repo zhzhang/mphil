@@ -6,7 +6,7 @@ import cPickle
 import numpy as np
 import os
 import time
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool
 from preprocess import *
 
 def time_call(f):
@@ -41,80 +41,57 @@ def check_sparsity(path, wordmap):
     print float(sum(coverages)) / len(coverages)
 
 @time_call
-def generate_matrices(path, wordmap, cores, targets):
+def generate_matrices(path, wordmap, cores, targets, output_dir):
     args = []
-    manager = Manager()
-    lock = manager.Lock()
-    matrices = manager.dict()
-    for root, dirnames, filenames in os.walk(path):
-        for filename in filenames:
-            args.append((root, filename, matrices, lock, wordmap, targets))
     pool = Pool(processes=cores if not cores == None else 1)
+    output_dir = os.path.join(output_dir, 'matrices')
+    for target in targets:
+        args.append((target, path, output_dir, wordmap))
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     pool.map(generate_matrices_worker, args)
     pool.close()
     pool.join()
-    return dict(matrices) # TODO: Find out if there's anything wrong with this.
 
 def generate_matrices_worker(args):
-    root, filename, total_matrices, lock, wordmap, targets = args
-    print "Processing %s in %s" % (filename, root)
-    f = open_file(os.path.join(root, filename))
-    matrices = {}
-    for line in f:
-        tokens = tokenize(line)
-        sentence = []
-        for token in tokens:
-            if token in wordmap:
-                sentence.append(wordmap[token])
-        context = get_context(sentence)
-        # Get normalization constant for vectors.
-        normalizer = 0.0
-        for x in context:
-            normalizer += context[x] ** 2
-        for target in tokens:
-            if not targets == None and not target in targets:
-                continue
-            if not target in matrices:
-                matrices[target] = {}
-            keys = context.keys()
-            tid = wordmap[target] if target in wordmap else -1
-            if tid in context:
-                final_normalizer = normalizer - context[tid] ** 2\
-                  + (context[tid] - 1) ** 2
-            else:
-                final_normalizer = normalizer
-            for i in range(len(keys)):
-                for j in range(i, len(keys)):
-                    a = min(keys[i], keys[j])
-                    b = max(keys[i], keys[j])
-                    count_a = context[a]
-                    count_b = context[b]
-                    if tid == a:
-                        count_a -= 1
-                    if tid == b:
-                        count_b -= 1
-                    if count_a > 0 and count_b > 0:
-                        if (a,b) in matrices[target]:
-                            matrices[target][(a,b)] +=\
-                              count_a * count_b / final_normalizer
+    target, path, output_dir, wordmap = args
+    print "Generating density matrix for word: %s" % target
+    matrix = {}
+    for root, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            f = open_file(os.path.join(root, filename))
+            for line in f:
+                tokens = tokenize(line)
+                sentence = []
+                pruned = False # Remove the first instance of the target word.
+                target_count = 0
+                for token in tokens:
+                    if token == target:
+                        target_count += 1
+                    if token in wordmap:
+                        if token == target and not pruned:
+                            pruned = True
                         else:
-                            matrices[target][(a,b)] =\
-                              count_a * count_b / final_normalizer
-    # Update the total matrix
-    lock.acquire()
-    for target in matrices:
-        target_matrix = matrices[target]
-        if target in total_matrices:
-            total_target_matrix = total_matrices[target]
-        else:
-            total_target_matrix = {}
-        for token in target_matrix:
-            if token in total_target_matrix:
-                total_target_matrix[token] += target_matrix[token]
-            else:
-                total_target_matrix[token] = target_matrix[token]
-        total_matrices[target] = total_target_matrix
-    lock.release()
+                            sentence.append(wordmap[token])
+                if not target_count > 0:
+                    continue
+                context = get_context(sentence)
+                keys = context.keys()
+                for i in range(len(keys)):
+                    for j in range(i, len(keys)):
+                        a = min(keys[i], keys[j])
+                        b = max(keys[i], keys[j])
+                        count_a = context[a]
+                        count_b = context[b]
+                        if (a,b) in matrix:
+                            matrix[(a,b)] +=\
+                              count_a * count_b * target_count
+                        else:
+                            matrix[(a,b)] =\
+                              count_a * count_b * target_count
+    # Save matrix.
+    with open(os.path.join(output_dir, target + '.pkl'), 'w') as f:
+        pickle.dump(matrix, f)
 
 def get_context(sentence):
     word_counts = {}
@@ -124,9 +101,6 @@ def get_context(sentence):
         else:
             word_counts[word] = 1
     return word_counts
-
-def verify_matrix(output, correct):
-    pass
 
 def print_matrices(matrices, wordmap):
     reverse_wordmap = {}
@@ -139,7 +113,7 @@ def print_matrices(matrices, wordmap):
             print reverse_wordmap[pair[0]], reverse_wordmap[pair[1]],\
               matrices[target][pair]
 
-def process_corpus(path, wordmap_path, cores, targets, verbose):
+def process_corpus(path, wordmap_path, cores, targets, verbose, output_dir):
     if wordmap_path == None:
         wordmap = get_wordmap(path, 2000)
         with open('wordmap.pkl', 'w+') as f:
@@ -154,20 +128,19 @@ def process_corpus(path, wordmap_path, cores, targets, verbose):
         for a, b in target_pairs:
             targets.add(a)
             targets.add(b)
-    matrices = generate_matrices(path, wordmap, cores, targets)
+    generate_matrices(path, wordmap, cores, targets, output_dir)
     if verbose:
         print_matrices(matrices, wordmap)
-    with open('matrices.pkl', 'w+') as f:
-        cPickle.dump(matrices, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Construct density matrices.")
     parser.add_argument('path', type=str, help='path to corpus')
+    parser.add_argument('output', type=str, help='path to output directory')
     parser.add_argument('--targets', type=str, help='path to pickled target dict')
     parser.add_argument('--wordmap', type=str, help='path to wordmap')
     parser.add_argument('--cores', type=int, help='number of cores to use')
     parser.add_argument('-v', help='verbose', action='store_true')
     args = parser.parse_args()
     process_corpus(args.path, args.wordmap, args.cores, args.targets,\
-      args.v)
+      args.v, args.output)
 
