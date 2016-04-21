@@ -57,25 +57,24 @@ def generate_matrices_worker(args):
     target, path, output_dir, wordmap = args
     print "Generating density matrix for word: %s" % target
     matrix = {}
+    tid = wordmap[target]
     for root, dirnames, filenames in os.walk(path):
         for filename in filenames:
             f = open_file(os.path.join(root, filename))
             for line in f:
-                tokens = tokenize(line)
-                sentence = []
                 pruned = False # Remove the first instance of the target word.
                 target_count = 0
-                for token in tokens:
-                    if token == target:
+                for token in line:
+                    if token == tid:
                         target_count += 1
-                    if token in wordmap:
-                        if token == target and not pruned:
-                            pruned = True
-                        else:
-                            sentence.append(wordmap[token])
                 if not target_count > 0:
                     continue
-                context = get_context(sentence)
+                context = get_context(sentence, wordmap['_d'])
+                if tid < wordmap['_d']:
+                    if context[tid] = 1:
+                        del context[tid]
+                    else:
+                        context[tid] = context[tid] - 1
                 keys = context.keys()
                 for i in range(len(keys)):
                     for j in range(i, len(keys)):
@@ -93,10 +92,12 @@ def generate_matrices_worker(args):
     with open(os.path.join(output_dir, target + '.pkl'), 'w') as f:
         pickle.dump(matrix, f)
 
-def get_context(sentence):
+def get_context(sentence, dim):
     word_counts = {}
     for word in sentence:
-        if word in word_counts:
+        if word >= dim:
+            continue
+        elif word in word_counts:
             word_counts[word] += 1
         else:
             word_counts[word] = 1
