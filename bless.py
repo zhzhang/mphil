@@ -3,7 +3,7 @@ import cPickle as pickle
 import time
 from dmatrices import DMatrices
 
-def process_bless(path, matrices, wordmap, num_cores):
+def process_bless(path, matrices, wordmap, num_cores, results):
     with open(path, 'r') as f:
         bless = pickle.load(f)
     dm = DMatrices(matrices, wordmap)
@@ -15,7 +15,7 @@ def process_bless(path, matrices, wordmap, num_cores):
     dm.get_eigenvectors(words, num_cores=num_cores)
     print "Eigenvectors computed in %d seconds" % (time.time() - t)
     t = time.time()
-    dm.repres(bless, num_cores=num_cores)
+    dm.repres(bless, num_cores=num_cores, results=results)
     print "Processed pairs in %d seconds" % (time.time() - t)
 
 if __name__ == "__main__":
@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('matrices', type=str, help='path to pickled matrices')
     parser.add_argument('wordmap', type=str, help='path to pickled wordmap')
     parser.add_argument('--num_cores', type=int, help='number of cores to use', default=1)
+    parser.add_argument('--results', type=str, help='path to results output path')
     args = parser.parse_args()
-    process_bless(args.path, args.matrices, args.wordmap, args.num_cores)
+    process_bless(args.path, args.matrices, args.wordmap, args.num_cores, args.results)
 

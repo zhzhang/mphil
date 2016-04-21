@@ -28,6 +28,7 @@ class DMatrices(object):
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
+        basis_map = dict([(i,i) for i in range(self.wordmap['_d'])])
         for word in words:
             if os.path.exists(os.path.join(eigen_path, word + '.pkl')):
                 continue
@@ -35,7 +36,7 @@ class DMatrices(object):
                 word_id = self.wordmap[word]
             except KeyError:
                 continue
-            matrix, basis_map = self._load_single(word_id)
+            matrix = self.load_matrix(word_id, smoothed=True)
             if matrix == None:
                 continue
             args.append((word, matrix, basis_map, eigen_path))
@@ -45,7 +46,7 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def repres(self, pairs, num_cores=1):
+    def repres(self, pairs, num_cores=1, results=None):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -61,12 +62,22 @@ class DMatrices(object):
         pool.close()
         pool.join()
         for i, pair in enumerate(results):
-            if not pair == None:
-                print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
+            if results == None:
+                if not pair == None:
+                    print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
+                else:
+                    print args[i][0], args[i][1]
             else:
-                print args[i][0], args[i][1]
+                f = open(results, 'w')
+                if not pair == None:
+                    f.write('%s %s %0.5f %0.5f\n') %\
+                      (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1]))
+                else:
+                    f.write('%s %s') % (args[i][0], args[i][1])
+                f.close()
 
-    def _get_basis(self, *args):
+    @staticmethod
+    def _get_basis(*args):
         basis = set()
         for target in args:
             for a,b in target.keys():
@@ -79,12 +90,24 @@ class DMatrices(object):
             basis_map[b] = i
         return basis_map
 
-    def _load_single(self, x):
-        x = self.matrices[x]
-        basis_map = self._get_basis(x)
-        return self._get_matrix(x, basis_map), basis_map
+    def load_matrix(self, target, smoothed=False):
+        matrix = self.matrices[target]
+        if smoothed:
+            if len(matrix) == 0:
+                return None
+            dim = self.wordmap['_d']
+            output = np.zeros([dim, dim])
+            for x,y in matrix:
+                output[x,y] = matrix[(x,y)]
+                output[y,x] = matrix[(x,y)]
+            output = output / np.trace(output)
+            DMatrices._smooth_matrix(output)
+            return output
+        basis_map = DMatrices._get_basis(matrix)
+        return DMatrices._get_matrix(matrix, basis_map), basis_map
 
-    def _get_matrix(self, target, basis_map):
+    @staticmethod
+    def _get_matrix(target, basis_map):
         if len(target) == 0:
             return None
         output = np.zeros([len(basis_map), len(basis_map)])
@@ -96,8 +119,14 @@ class DMatrices(object):
             output[y_ind,x_ind] = target[pair]
         return output / np.trace(output)
 
-def _load_eigen(word, eigen_path):
-    with open(os.path.join(eigen_path, word + '.pkl'), 'r') as f:
+    @staticmethod
+    def _smooth_matrix(matrix):
+        dim = matrix.shape[0]
+        for i in range(dim):
+            matrix[i,i] = matrix[i,i] + np.random.exponential(1e-5)
+
+def _load_eigen(path):
+    with open(path, 'r') as f:
         return pickle.load(f)
 
 def _compute_rel_ent_worker(args):
@@ -106,12 +135,17 @@ def _compute_rel_ent_worker(args):
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
-    eigx, vecx, basis_map_x = _load_eigen(word_x, eigen_path)
-    eigy, vecy, basis_map_y = _load_eigen(word_y, eigen_path)
+    t = time.time()
+    eigx, vecx, basis_map_x = _load_eigen(pathx)
+    eigy, vecy, basis_map_y = _load_eigen(pathy)
+    print "loading eigens took %0.1f seconds" % (time.time() - t)
     eigx = np.real(eigx)
     eigy = np.real(eigy)
     vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
-    return compute_rel_ent(eigx, vecx, eigy, vecy)
+    t = time.time()
+    tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
+    print "computing rel ent took %0.1f seconds" % (time.time() - t)
+    return tmp
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     new_basis_map = basis_map_x.copy()
