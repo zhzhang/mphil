@@ -55,7 +55,7 @@ def generate_matrices(path, wordmap, cores, targets, output_dir):
 
 def generate_matrices_worker(args):
     target, path, output_dir, wordmap = args
-    print "Generating density matrix for word: %s" % target
+    print "Generating density matrix for '%s'" % target
     matrix = {}
     tid = wordmap[target]
     for root, dirnames, filenames in os.walk(path):
@@ -71,7 +71,7 @@ def generate_matrices_worker(args):
                     continue
                 context = get_context(sentence, wordmap['_d'])
                 if tid < wordmap['_d']:
-                    if context[tid] = 1:
+                    if context[tid] == 1:
                         del context[tid]
                     else:
                         context[tid] = context[tid] - 1

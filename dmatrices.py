@@ -46,7 +46,7 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def repres(self, pairs, num_cores=1, results=None):
+    def repres(self, pairs, num_cores=1, output=None):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -62,13 +62,13 @@ class DMatrices(object):
         pool.close()
         pool.join()
         for i, pair in enumerate(results):
-            if results == None:
+            if output == None:
                 if not pair == None:
                     print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
                 else:
                     print args[i][0], args[i][1]
             else:
-                f = open(results, 'w')
+                f = open(output, 'w')
                 if not pair == None:
                     f.write('%s %s %0.5f %0.5f\n') %\
                       (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1]))
@@ -138,13 +138,11 @@ def _compute_rel_ent_worker(args):
     t = time.time()
     eigx, vecx, basis_map_x = _load_eigen(pathx)
     eigy, vecy, basis_map_y = _load_eigen(pathy)
-    print "loading eigens took %0.1f seconds" % (time.time() - t)
     eigx = np.real(eigx)
     eigy = np.real(eigy)
     vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
     t = time.time()
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
-    print "computing rel ent took %0.1f seconds" % (time.time() - t)
     return tmp
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
