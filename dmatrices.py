@@ -36,7 +36,7 @@ class DMatrices(object):
                 word_id = self.wordmap[word]
             except KeyError:
                 continue
-            matrix = self.load_matrix(word_id, smoothed=True)
+            matrix, basis_map = self.load_matrix(word_id)#, smoothed=True)
             if matrix == None:
                 continue
             args.append((word, matrix, basis_map, eigen_path))
@@ -61,20 +61,21 @@ class DMatrices(object):
         results = pool.map(_compute_rel_ent_worker, args)
         pool.close()
         pool.join()
-        for i, pair in enumerate(results):
-            if output == None:
+        if output == None:
+            for i, pair in enumerate(results):
                 if not pair == None:
                     print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
                 else:
                     print args[i][0], args[i][1]
-            else:
-                f = open(output, 'w')
+        else:
+            f = open(output, 'w')
+            for i, pair in enumerate(results):
                 if not pair == None:
-                    f.write('%s %s %0.5f %0.5f\n') %\
-                      (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1]))
+                    f.write('%s %s %0.5f %0.5f\n' %\
+                      (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])))
                 else:
-                    f.write('%s %s') % (args[i][0], args[i][1])
-                f.close()
+                    f.write('%s %s' % (args[i][0], args[i][1]))
+            f.close()
 
     @staticmethod
     def _get_basis(*args):
