@@ -20,7 +20,8 @@ class DMatrices(object):
         wordmap = open(wordmap, 'r')
         self.wordmap = pickle.load(wordmap)
         wordmap.close()
-        self.dimension = len(self.wordmap)
+        self.dimension = self.wordmap['_d']
+        self._eigen = {}
 
     def get_eigenvectors(self, words, num_cores=1):
         pool = Pool(processes=num_cores)
@@ -29,24 +30,21 @@ class DMatrices(object):
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         basis_map = dict([(i,i) for i in range(self.wordmap['_d'])])
+        exists = []
         for word in words:
-            if os.path.exists(os.path.join(eigen_path, word + '.pkl')):
-                continue
-            try:
-                word_id = self.wordmap[word]
-            except KeyError:
-                continue
-            matrix, basis_map = self.load_matrix(word_id)#, smoothed=True)
-            if matrix == None:
-                continue
-            args.append((word, matrix, basis_map, eigen_path))
+            matrix = self.load_matrix(word, smoothed=True)
+            if not matrix is None:
+                exists.append(word)
+                args.append(matrix)
         if len(args) == 0:
             return
-        pool.map(_get_eigenvectors_worker, args)
+        results = pool.map(np.linalg.eig, args)
         pool.close()
         pool.join()
+        for i, word in enumerate(exists):
+            self._eigen[word] = results[i]
 
-    def repres(self, pairs, num_cores=1, output=None):
+    def repres(self, pairs, num_cores=1):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -56,26 +54,15 @@ class DMatrices(object):
         pool = Pool(processes=num_cores)
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
-        for a,b in pairs:
-            args.append((a, b, eigen_path))
+        for i, (a,b) in enumerate(pairs):
+            try:
+                args.append((self._eigen[a], self._eigen[b]))
+            except KeyError:
+                args.append(None)
         results = pool.map(_compute_rel_ent_worker, args)
         pool.close()
         pool.join()
-        if output == None:
-            for i, pair in enumerate(results):
-                if not pair == None:
-                    print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
-                else:
-                    print args[i][0], args[i][1]
-        else:
-            f = open(output, 'w')
-            for i, pair in enumerate(results):
-                if not pair == None:
-                    f.write('%s %s %0.5f %0.5f\n' %\
-                      (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])))
-                else:
-                    f.write('%s %s' % (args[i][0], args[i][1]))
-            f.close()
+        return results
 
     @staticmethod
     def _get_basis(*args):
@@ -92,56 +79,49 @@ class DMatrices(object):
         return basis_map
 
     def load_matrix(self, target, smoothed=False):
-        matrix = self.matrices[target]
-        if smoothed:
-            if len(matrix) == 0:
-                return None
-            dim = self.wordmap['_d']
-            output = np.zeros([dim, dim])
-            for x,y in matrix:
-                output[x,y] = matrix[(x,y)]
-                output[y,x] = matrix[(x,y)]
-            output = output / np.trace(output)
-            DMatrices._smooth_matrix(output)
-            return output
-        basis_map = DMatrices._get_basis(matrix)
-        return DMatrices._get_matrix(matrix, basis_map), basis_map
-
-    @staticmethod
-    def _get_matrix(target, basis_map):
-        if len(target) == 0:
+        if not target in self.wordmap:
             return None
-        output = np.zeros([len(basis_map), len(basis_map)])
-        for pair in target:
-            x,y = pair
-            x_ind = basis_map[x]
-            y_ind = basis_map[y]
-            output[x_ind,y_ind] = target[pair]
-            output[y_ind,x_ind] = target[pair]
+        target = self.wordmap[target]
+        if not target in self.matrices:
+            return None
+        matrix = self.matrices[target]
+        if len(matrix) == 0:
+            return None
+        dim = self.wordmap['_d']
+        output = np.zeros([self.dimension, self.dimension])
+        for x,y in matrix:
+            output[x,y] = matrix[(x,y)]
+            output[y,x] = matrix[(x,y)]
+        if smoothed:
+            DMatrices._smooth_matrix(output)
         return output / np.trace(output)
 
     @staticmethod
     def _smooth_matrix(matrix):
         dim = matrix.shape[0]
         for i in range(dim):
-            matrix[i,i] = matrix[i,i] + np.random.exponential(1e-5)
+            matrix[i,i] = matrix[i,i] + 1e-8
 
 def _load_eigen(path):
     with open(path, 'r') as f:
         return pickle.load(f)
 
 def _compute_rel_ent_worker(args):
+    if args is None:
+        return None
+    ((eigx, vecx), (eigy, vecy)) = args
+    """
     (word_x, word_y, eigen_path) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
-    t = time.time()
-    eigx, vecx, basis_map_x = _load_eigen(pathx)
-    eigy, vecy, basis_map_y = _load_eigen(pathy)
+    eigx, vecx = _load_eigen(pathx)
+    eigy, vecy = _load_eigen(pathy)
+    """
     eigx = np.real(eigx)
     eigy = np.real(eigy)
-    vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
+    #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
     t = time.time()
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
     return tmp
@@ -190,13 +170,12 @@ def _tr_log(A, eiga, B, eigb):
             output_ba += tmp_ba[i] * np.log(lam_a)
     return output_ab, output_ba
 
-
 def _get_eigenvectors_worker(args):
-    word, matrix, basis_map, eigen_path = args
+    word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
     eigx, vecx = np.linalg.eig(matrix)
     with open(os.path.join(eigen_path, word + '.pkl'), 'w+') as f:
-        pickle.dump((eigx, vecx, basis_map), f)
+        pickle.dump((eigx, vecx), f)
 
 if __name__ == '__main__':
     pass

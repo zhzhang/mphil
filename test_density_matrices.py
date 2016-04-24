@@ -4,6 +4,7 @@ import numpy as np
 from scipy.linalg import logm, sqrtm
 import os
 import shutil
+import cPickle as pickle
 
 # Define formulaic computation of the associated measures.
 def compute_rel_ent(X,Y):
@@ -51,19 +52,12 @@ if err_BA > dmatrices.ZERO_THRESH:
 if err_AB > dmatrices.ZERO_THRESH:
     print "Failed Test 2, error A->B was %f" % err_AB
 
-# Test 3: example from E. Balkir's work.
+# Test 3: example from E. Balkir's work, computing from relative entropy
 a = np.array([6,5,0], dtype=float)
 b = np.array([7,3,0], dtype=float)
 
 c = np.array([1,0,0], dtype=float)
 d = np.array([1,1,0], dtype=float)
-
-"""
-a = a / np.linalg.norm(a)
-b = b / np.linalg.norm(b)
-c = c / np.linalg.norm(c)
-d = d / np.linalg.norm(d)
-"""
 
 lager = np.outer(a,a)
 ale = np.outer(b,b)
@@ -75,12 +69,16 @@ beer = beer / np.trace(beer)
 
 eig_beer, vec_beer = np.linalg.eig(beer)
 eig_lager, vec_lager = np.linalg.eig(lager)
-print dmatrices.compute_rel_ent(eig_beer, vec_beer, eig_lager, vec_lager)
-_, tmp = compute_rel_ent(beer, lager)
-print tmp
-print 1 / (1 + tmp)
-print '---'
+S_AB, S_BA = dmatrices.compute_rel_ent(eig_beer, vec_beer, eig_lager, vec_lager)
+true_S_AB, true_S_BA = compute_rel_ent(beer, lager)
+err_AB = np.absolute(S_AB - true_S_AB)
+err_BA = np.absolute(S_BA - true_S_BA)
+if err_BA > dmatrices.ZERO_THRESH:
+    print "Failed Test 3, error B->A was %f" % err_BA
+if err_AB > dmatrices.ZERO_THRESH:
+    print "Failed Test 3, error A->B was %f" % err_AB
 
+# Test 3: another example from E. Balkir's work.
 psy = np.zeros([3,3])
 psy[0,0] = 2
 psy[1,1] = 5
@@ -94,16 +92,23 @@ a = psy[0,0]
 b = psy[1,1]
 c = doc[0,0]
 d = doc[1,1]
-print a * (log(a) - log(c)) + b * (log(b) - log(d))
-
 
 eig_doc, vec_doc = np.linalg.eig(doc)
 eig_psy, vec_psy= np.linalg.eig(psy)
-print dmatrices.compute_rel_ent(eig_doc, vec_doc, eig_psy, vec_psy)
+S_AB, S_BA = dmatrices.compute_rel_ent(eig_doc, vec_doc, eig_psy, vec_psy)
+true_S_AB, true_S_BA = compute_rel_ent(doc, psy)
+err_AB = np.absolute(S_AB - true_S_AB)
+err_BA = np.absolute(S_BA - true_S_BA)
+if err_BA > dmatrices.ZERO_THRESH:
+    print "Failed Test 4, error B->A was %f" % err_BA
+if err_AB > dmatrices.ZERO_THRESH:
+    print "Failed Test 4, error A->B was %f" % err_AB
 
-tmp, _ = compute_rel_ent(psy, doc)
-print 1 / (1 + tmp)
+dm = dmatrices.DMatrices('matrices.pkl', 'wordmap.pkl')
+carp = dm.load_matrix('carp', smoothed=True)
+food = dm.load_matrix('food', smoothed=True)
+print compute_rel_ent(carp, food)
 
-print compute_fidelity(doc, psy)
 
-
+#print eig_desk
+#print eig_furn

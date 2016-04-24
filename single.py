@@ -98,16 +98,16 @@ def get_context(sentence, dim):
             word_counts[word] = 1
     return word_counts
 
-def process_corpus(path, wordmap_path, cores, targets, verbose, out='matrices.pkl'):
-    if not targets == None:
+def process_corpus(path, wordmap_path, cores, targets_path, verbose, out='matrices.pkl'):
+    if targets_path:
         with open(wordmap_path, 'r') as f:
             wordmap = pickle.load(f)
-        with open(targets, 'r') as f:
-            target_pairs = pickle.load(f)
         targets = set()
-        for a, b in target_pairs:
-            targets.add(wordmap[a])
-            targets.add(wordmap[b])
+        with open(targets_path, 'r') as f:
+            for line in f:
+                a,b = line.rstrip('\n').split()
+                targets.add(wordmap[a])
+                targets.add(wordmap[b])
     matrices = generate_matrices(path, cores, targets, wordmap)
     if verbose:
         print_matrices(matrices, wordmap)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', action='store_true',\
       help='flag to retrieve corpus statistics instead of preprocessing the corpus')
     args = parser.parse_args()
-    if not args.out == None:
+    if args.out:
         process_corpus(args.path, args.wordmap, args.cores, args.targets,\
           args.v)
     elif args.s:

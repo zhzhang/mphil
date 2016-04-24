@@ -83,12 +83,12 @@ def get_wordmap(path, threshold, targets):
 
 # Retrieve target words.
 def get_targets(targets):
-    with open(targets, 'r') as f:
-        targets = pickle.load(f)
     output = set()
-    for a,b in targets:
-        output.add(a)
-        output.add(b)
+    with open(targets, 'r') as f:
+        for line in f:
+            a,b = line.rstrip('\n').split(' ')
+            output.add(a)
+            output.add(b)
     return output
 
 def preprocess_corpus(path, out, cores, wordmap, targets, dim=2000):
