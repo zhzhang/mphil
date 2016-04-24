@@ -23,8 +23,8 @@ class DMatrices(object):
         self.dimension = self.wordmap['_d']
         self._eigen = {}
 
-    def get_eigenvectors(self, words, num_cores=1):
-        pool = Pool(processes=num_cores)
+    def get_eigenvectors(self, words, num_processes=1):
+        pool = Pool(processes=num_processes)
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         if not os.path.exists(eigen_path):
@@ -44,14 +44,14 @@ class DMatrices(object):
         for i, word in enumerate(exists):
             self._eigen[word] = results[i]
 
-    def repres(self, pairs, num_cores=1):
+    def repres(self, pairs, num_processes=1):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
             words.add(a)
             words.add(b)
         self.get_eigenvectors(words)
-        pool = Pool(processes=num_cores)
+        pool = Pool(processes=num_processes)
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         for i, (a,b) in enumerate(pairs):
@@ -59,7 +59,7 @@ class DMatrices(object):
                 args.append((self._eigen[a], self._eigen[b]))
             except KeyError:
                 args.append(None)
-        results = pool.map(_compute_rel_ent_worker, args)
+        results = pool.map(_compute_repres_worker, args)
         pool.close()
         pool.join()
         return results
@@ -106,7 +106,7 @@ def _load_eigen(path):
     with open(path, 'r') as f:
         return pickle.load(f)
 
-def _compute_rel_ent_worker(args):
+def _compute_repres_worker(args):
     if args is None:
         return None
     ((eigx, vecx), (eigy, vecy)) = args
@@ -122,9 +122,8 @@ def _compute_rel_ent_worker(args):
     eigx = np.real(eigx)
     eigy = np.real(eigy)
     #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
-    t = time.time()
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
-    return tmp
+    return (1/(1+tmp[0]), 1/(1+tmp[1]))
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     new_basis_map = basis_map_x.copy()
