@@ -3,7 +3,7 @@ import cPickle as pickle
 import time
 from dmatrices import DMatrices
 
-def process_data(path, matrices, wordmap, num_processes, output_path):
+def process_data(path, matrices, num_processes, output_path):
     pairs = []
     words = set()
     with open(path, 'r') as f:
@@ -12,7 +12,7 @@ def process_data(path, matrices, wordmap, num_processes, output_path):
             pairs.append((a,b))
             words.add(a)
             words.add(b)
-    dm = DMatrices(matrices, wordmap)
+    dm = DMatrices(matrices)
     t = time.time()
     results = dm.repres(pairs, num_processes=num_processes)
     print "Processed pairs in %d seconds" % (time.time() - t)
@@ -33,10 +33,9 @@ def process_data(path, matrices, wordmap, num_processes, output_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate on entailment data set.")
     parser.add_argument('path', type=str, help='path to entailment data data')
-    parser.add_argument('matrices', type=str, help='path to pickled matrices')
-    parser.add_argument('wordmap', type=str, help='path to pickled wordmap')
+    parser.add_argument('matrices', type=str, help='path to matrices')
     parser.add_argument('--num_processes', type=int, help='number of processes to use', default=1)
     parser.add_argument('--output', type=str, help='path to results output path')
     args = parser.parse_args()
-    process_data(args.path, args.matrices, args.wordmap, args.num_processes, args.output)
+    process_data(args.path, args.matrices, args.num_processes, args.output)
 

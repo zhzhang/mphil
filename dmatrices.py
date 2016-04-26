@@ -1,4 +1,5 @@
 import cPickle as pickle
+import density_matrix_pb2
 import numpy as np
 import os
 import time
@@ -8,19 +9,18 @@ from multiprocessing import Pool
 ZERO_THRESH = 1e-12
 
 class DMatrices(object):
-    def __init__(self, matrices_path, wordmap, test=False):
+    def __init__(self, matrices_path, test=False):
         print "Loading matrices at %s" % matrices_path
         t = time.time()
         self.matrices_path = matrices_path
-        matrices = open(matrices_path, 'r')
-        self.matrices = pickle.load(matrices)
-        matrices.close()
+        with open(matrices_path, 'rb') as f:
+            dmlist = density_matrix_pb2.DMatrixList()
+            dmlist.ParseFromString(f.read())
+        self.matrices = {}
+        for matrix in dmlist.matrices:
+            self.matrices[matrix.word] = matrix
+        self.dimension = dmlist.dimension
         print "Matrices loaded in %0.3f seconds" % (time.time() - t)
-        print "Loading wordmap at %s" % wordmap 
-        wordmap = open(wordmap, 'r')
-        self.wordmap = pickle.load(wordmap)
-        wordmap.close()
-        self.dimension = self.wordmap['_d']
         self._eigen = {}
 
     def get_eigenvectors(self, words, num_processes=1):
@@ -29,7 +29,7 @@ class DMatrices(object):
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
-        basis_map = dict([(i,i) for i in range(self.wordmap['_d'])])
+        basis_map = dict([(i,i) for i in range(self.dimension)])
         exists = []
         for word in words:
             matrix = self.load_matrix(word, smoothed=True)
@@ -79,19 +79,16 @@ class DMatrices(object):
         return basis_map
 
     def load_matrix(self, target, smoothed=False):
-        if not target in self.wordmap:
-            return None
-        target = self.wordmap[target]
         if not target in self.matrices:
             return None
         matrix = self.matrices[target]
-        if len(matrix) == 0:
-            return None
-        dim = self.wordmap['_d']
-        output = np.zeros([self.dimension, self.dimension])
-        for x,y in matrix:
-            output[x,y] = matrix[(x,y)]
-            output[y,x] = matrix[(x,y)]
+        dim = self.dimension
+        output = np.zeros([dim, dim])
+        for entry in matrix.entries:
+            x = entry.x
+            y = entry.y
+            output[x,y] = entry.val
+            output[y,x] = entry.val
         if smoothed:
             DMatrices._smooth_matrix(output)
         return output / np.trace(output)
