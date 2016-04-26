@@ -36,15 +36,17 @@ def open_file(path):
     return f
 
 def tokenize(line):
+    if '<doc' in line or 'doc>' in line:
+        return []
     tmp = map(lambda x: REMOVE.sub('', x).lower(), line.split(' '))
     return filter(_filter_helper, tmp)
 
 def _filter_helper(word):
-    if '<doc' in word or 'doc>' in word:
-        return False
-    elif word in STOPWORDS:
+    if word in STOPWORDS:
         return False
     elif len(word) == 0:
+        return False
+    elif bool(re.search(r'\d', word)):
         return False
     else:
         return True
