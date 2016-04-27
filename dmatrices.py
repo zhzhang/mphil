@@ -1,5 +1,5 @@
 import cPickle as pickle
-import density_matrix_pb2
+import density_matrix_dense_pb2
 import numpy as np
 import os
 import time
@@ -14,7 +14,7 @@ class DMatrices(object):
         t = time.time()
         self.matrices_path = matrices_path
         with open(matrices_path, 'rb') as f:
-            dmlist = density_matrix_pb2.DMatrixList()
+            dmlist = density_matrix_dense_pb2.DMatrixListDense()
             dmlist.ParseFromString(f.read())
         self.matrices = {}
         for matrix in dmlist.matrices:
@@ -32,7 +32,7 @@ class DMatrices(object):
         basis_map = dict([(i,i) for i in range(self.dimension)])
         exists = []
         for word in words:
-            matrix = self.load_matrix(word, smoothed=True)
+            matrix = self.load_matrix(word)#, smoothed=True)
             if not matrix is None:
                 exists.append(word)
                 args.append(matrix)
@@ -84,11 +84,16 @@ class DMatrices(object):
         matrix = self.matrices[target]
         dim = self.dimension
         output = np.zeros([dim, dim])
-        for entry in matrix.entries:
-            x = entry.x
-            y = entry.y
-            output[x,y] = entry.val
-            output[y,x] = entry.val
+        x = 0
+        data_iter = iter(matrix.data)
+        while x < dim:
+            y = x
+            while y < dim:
+                val = data_iter.next()
+                output[x,y] = val
+                output[y,x] = val
+                y += 1
+            x += 1
         if smoothed:
             DMatrices._smooth_matrix(output)
         return output / np.trace(output)
