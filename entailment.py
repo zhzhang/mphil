@@ -3,7 +3,7 @@ import cPickle as pickle
 import time
 from dmatrices import DMatrices
 
-def process_data(path, matrices, num_processes, output_path):
+def process_data(path, matrices, num_processes, output_path, dense):
     pairs = []
     words = set()
     with open(path, 'r') as f:
@@ -12,7 +12,7 @@ def process_data(path, matrices, num_processes, output_path):
             pairs.append((a,b))
             words.add(a)
             words.add(b)
-    dm = DMatrices(matrices)
+    dm = DMatrices(matrices, dense=dense)
     t = time.time()
     results = dm.repres(pairs, num_processes=num_processes)
     print "Processed pairs in %d seconds" % (time.time() - t)
@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('matrices', type=str, help='path to matrices')
     parser.add_argument('--num_processes', type=int, help='number of processes to use', default=1)
     parser.add_argument('--output', type=str, help='path to results output path')
+    parser.add_argument('--dense', action='store_true', help='flag for dense matrices input')
     args = parser.parse_args()
-    process_data(args.path, args.matrices, args.num_processes, args.output)
+    process_data(args.path, args.matrices, args.num_processes, args.output, args.dense)
 
