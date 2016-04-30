@@ -1,6 +1,4 @@
 import cPickle as pickle
-import density_matrix_dense_pb2
-import density_matrix_sparse_pb2
 import numpy as np
 import os
 import time
@@ -10,7 +8,7 @@ from multiprocessing import Pool
 ZERO_THRESH = 1e-12
 
 class DMatrices(object):
-    def __init__(self, matrices_path, test=False, dense=False):
+    def __init__(self, matrices_path, wordmap, test=False):
         print "Loading matrices at %s" % matrices_path
         t = time.time()
         self.matrices_path = matrices_path
@@ -26,62 +24,61 @@ class DMatrices(object):
             self.matrices[matrix.word] = matrix
         self.dimension = dmlist.dimension
         print "Matrices loaded in %0.3f seconds" % (time.time() - t)
-        self._eigen = {}
 
-    def get_eigenvectors(self, words, num_processes=1):
-        pool = Pool(processes=num_processes)
+    def get_eigenvectors(self, words, num_cores=1):
+        pool = Pool(processes=num_cores)
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
-        basis_map = dict([(i,i) for i in range(self.dimension)])
-        exists = []
+        basis_map = dict([(i,i) for i in range(self.wordmap['_d'])])
         for word in words:
-            matrix = self.load_matrix(word, smoothed=True)
-            if not matrix is None:
-                exists.append(word)
-                args.append(matrix)
+            if os.path.exists(os.path.join(eigen_path, word + '.pkl')):
+                continue
+            try:
+                word_id = self.wordmap[word]
+            except KeyError:
+                continue
+            matrix = self.load_matrix(word_id)#, smoothed=True)
+            if matrix == None:
+                continue
+            args.append((word, matrix, eigen_path))
         if len(args) == 0:
             return
-        results = pool.map(np.linalg.eig, args)
+        pool.map(_get_eigenvectors_worker, args)
         pool.close()
         pool.join()
-        for i, word in enumerate(exists):
-            self._eigen[word] = results[i]
 
-    def repres(self, pairs, num_processes=1):
+    def repres(self, pairs, num_cores=1, output=None):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
             words.add(a)
             words.add(b)
         self.get_eigenvectors(words)
-        pool = Pool(processes=num_processes)
+        pool = Pool(processes=num_cores)
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
-        for i, (a,b) in enumerate(pairs):
-            try:
-                args.append((self._eigen[a], self._eigen[b]))
-            except KeyError:
-                args.append(None)
-        results = pool.map(_compute_repres_worker, args)
+        for a,b in pairs:
+            args.append((a, b, eigen_path))
+        results = pool.map(_compute_rel_ent_worker, args)
         pool.close()
         pool.join()
-        return results
-
-    @staticmethod
-    def _get_basis(*args):
-        basis = set()
-        for target in args:
-            for a,b in target.keys():
-                basis.add(a)
-                basis.add(b)
-        basis = list(basis)
-        basis.sort()
-        basis_map = {}
-        for i, b in enumerate(basis):
-            basis_map[b] = i
-        return basis_map
+        if output == None:
+            for i, pair in enumerate(results):
+                if not pair == None:
+                    print args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])
+                else:
+                    print args[i][0], args[i][1]
+        else:
+            f = open(output, 'w')
+            for i, pair in enumerate(results):
+                if not pair == None:
+                    f.write('%s %s %0.5f %0.5f\n' %\
+                      (args[i][0], args[i][1], 1 / (1 + pair[0]), 1 / (1 + pair[1])))
+                else:
+                    f.write('%s %s' % (args[i][0], args[i][1]))
+            f.close()
 
     def load_matrix(self, target, smoothed=False):
         if not target in self.matrices:
@@ -114,30 +111,26 @@ class DMatrices(object):
     def _smooth_matrix(matrix):
         dim = matrix.shape[0]
         for i in range(dim):
-            matrix[i,i] = matrix[i,i] + 1e-8
+            matrix[i,i] = matrix[i,i] + np.random.exponential(1e-12)
 
 def _load_eigen(path):
     with open(path, 'r') as f:
         return pickle.load(f)
 
-def _compute_repres_worker(args):
-    if args is None:
-        return None
-    ((eigx, vecx), (eigy, vecy)) = args
-    """
+def _compute_rel_ent_worker(args):
     (word_x, word_y, eigen_path) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
+    t = time.time()
     eigx, vecx = _load_eigen(pathx)
     eigy, vecy = _load_eigen(pathy)
-    """
     eigx = np.real(eigx)
     eigy = np.real(eigy)
-    #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
+    t = time.time()
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
-    return (1/(1+tmp[0]), 1/(1+tmp[1]))
+    return tmp
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     new_basis_map = basis_map_x.copy()
@@ -182,6 +175,7 @@ def _tr_log(A, eiga, B, eigb):
         else:
             output_ba += tmp_ba[i] * np.log(lam_a)
     return output_ab, output_ba
+
 
 def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
