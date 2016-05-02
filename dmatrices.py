@@ -90,8 +90,8 @@ class DMatrices(object):
             for entry in matrix.entries:
                 x = entry.x
                 y = entry.y
-                output[x,y] = entry.val
-                output[y,x] = entry.val
+                output[x,y] = entry.value
+                output[y,x] = entry.value
         if smoothed:
             DMatrices._smooth_matrix(output)
         return output / np.trace(output)

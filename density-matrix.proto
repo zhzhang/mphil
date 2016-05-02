@@ -9,7 +9,7 @@ message DMatrixSparse {
   message DMatrixEntry {
     required int32 x = 1;
     required int32 y = 2;
-    required float val = 3;
+    required float value = 3;
   }
 
   repeated DMatrixEntry entries = 3;
