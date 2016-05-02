@@ -12,7 +12,6 @@ class DMatrices(object):
     def __init__(self, matrices_path, test=False, dense=False):
         self.matrices_path = matrices_path
         self.dense = dense
-        self._eigen = {}
 
     def get_eigenvectors(self, words, num_processes=1):
         pool = Pool(processes=num_processes)
@@ -20,19 +19,15 @@ class DMatrices(object):
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
-        exists = []
         for word in words:
             matrix = self.load_matrix(word, smoothed=False)
             if not matrix is None:
-                exists.append(word)
-                args.append(matrix)
+                args.append(word, matrix, eigen_path)
         if len(args) == 0:
             return
-        results = pool.map(np.linalg.eigh, args)
+        results = pool.imap(_get_eigenvectors_worker, args)
         pool.close()
         pool.join()
-        for i, word in enumerate(exists):
-            self._eigen[word] = results[i]
 
     def repres(self, pairs, num_processes=1):
         # Compute missing eigenvectors.
@@ -46,7 +41,7 @@ class DMatrices(object):
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         for i, (a,b) in enumerate(pairs):
             try:
-                args.append((self._eigen[a], self._eigen[b]))
+                args.append((a, b, eigen_path))
             except KeyError:
                 args.append(None)
         results = pool.map(_compute_repres_worker, args)
@@ -114,8 +109,6 @@ def _load_eigen(path):
 def _compute_repres_worker(args):
     if args is None:
         return None
-    ((eigx, vecx), (eigy, vecy)) = args
-    """
     (word_x, word_y, eigen_path) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
@@ -123,7 +116,6 @@ def _compute_repres_worker(args):
         return None
     eigx, vecx = _load_eigen(pathx)
     eigy, vecy = _load_eigen(pathy)
-    """
     #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
     return (1/(1+tmp[0]), 1/(1+tmp[1]))
@@ -175,7 +167,7 @@ def _tr_log(A, eiga, B, eigb):
 def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
-    eigx, vecx = np.linalg.eig(matrix)
+    eigx, vecx = np.linalg.eigh(matrix)
     with open(os.path.join(eigen_path, word + '.pkl'), 'w+') as f:
         pickle.dump((eigx, vecx), f)
 
