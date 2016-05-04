@@ -20,11 +20,15 @@ def process_bless(path, output_path):
             con, relu, cla, rel = parse_line(line)
             if rel == 'hyper':
                 output[(con, relu)] = (rel, cla)
+            elif rel == 'random-n':
+                output[(con, relu)] = (rel, cla)
     if output_path:
         print "Saving output..."
-        with open(output_path, 'w+') as f:
+        with open(output_path + '.txt', 'w+') as f:
             for pair in output:
                 f.write("%s %s\n" % pair)
+        with open(output_path + '.pkl', 'w+') as f:
+            pickle.dump(output, f)
     return output
 
 if __name__ == "__main__":
