@@ -1,38 +1,89 @@
 import argparse
 import cPickle as pickle
+import numpy as np
+import os
 import time
-from dmatrices import DMatrices
+from dmatrices import DMatrices, ZERO_THRESH
 
-def process_data(path, matrices, num_processes, output_path, dense):
-    pairs = []
-    words = set()
+def process_data(path, matrices_path, num_processes, output_path, dense):
     with open(path, 'r') as f:
-        for line in f:
-            a,b = line.rstrip('\n').split(' ')
-            pairs.append((a,b))
-            words.add(a)
-            words.add(b)
-    dm = DMatrices(matrices, dense=dense)
+        data = pickle.load(f)
+    dm = DMatrices(matrices_path, dense=dense)
     t = time.time()
-    results = dm.repres(pairs, num_processes=num_processes)
-    print "Processed pairs in %d seconds" % (time.time() - t)
+    results = dm.repres(data.keys(), num_processes=num_processes)
+    print "Representativeness computed in %d seconds" % (time.time() - t)
+    evaluate(data, results)
     if output_path:
         f = open(output_path, 'w')
-    for i, pair in enumerate(pairs):
+    for i, pair in enumerate(data):
         if results[i]:
             output_str = "%s %s %0.5f %0.5f" % (pair + results[i])
         else:
             output_str = "%s %s" % (pair)
         if output_path:
             f.write(output_str + "\n")
-        else:
-            print output_str
+    vectors_path = os.path.join(matrices_path, "vectors.txt")
+    vector_results = process_vectors(data.keys(), vectors_path)
+    evaluate(data, vector_results)
 
+def process_vectors(pairs, vectors_path):
+    vectors = {}
+    with open(vectors_path, 'r') as f:
+        for line in f:
+            data = line.rstrip('\n').split(' ')
+            vectors[data[0]] = np.array([float(x) for x in data[1:]])
+    results = []
+    for pair in pairs:
+        if not (pair[0] in vectors and pair[1] in vectors):
+            results.append(None)
+            continue
+        vecx = vectors[pair[0]]
+        vecy = vectors[pair[1]]
+        x_entails_y = 1
+        y_entails_x = 1 
+        for i in range(len(vecx)):
+            if vecx[i] > ZERO_THRESH and vecy[i] <= ZERO_THRESH:
+                x_entails_y = 0
+            if vecy[i] > ZERO_THRESH and vecx[i] <= ZERO_THRESH:
+                y_entails_x = 0 
+        results.append((x_entails_y, y_entails_x))
+    return results
+
+def evaluate(ground_truth, results):
+    correct = 0
+    true_pos = 0
+    false_pos = 0
+    true_neg = 0
+    false_neg = 0
+    total = 0
+    pos = 0
+    neg = 0
+    for i, pair in enumerate(ground_truth):
+        if results[i] == None:
+            continue
+        total += 1
+        r_ab, r_ba = results[i]
+        if ground_truth[pair][0] == "hyper":
+            pos += 1
+            if r_ab > r_ba:
+                true_pos += 1
+                if r_ba == 0.0:
+                    correct += 1
+            elif r_ab <= r_ba:
+                false_neg += 1
+        if ground_truth[pair][0] == "random_n":
+            neg += 1
+            if r_ab > r_ba:
+                false_pos += 1
+            elif r_ab <= r_ba:
+                true_neg += 1
+    print "Total pairs with complete data: %d out of %d" % (total, len(ground_truth))
+    print "Completely correct %d out of %d, %0.1f%%" % (correct, pos, 100 * correct / float(pos))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate on entailment data set.")
-    parser.add_argument('path', type=str, help='path to entailment data data')
+    parser.add_argument('path', type=str, help='path to entailment data')
     parser.add_argument('matrices', type=str, help='path to matrices')
     parser.add_argument('--num_processes', type=int, help='number of processes to use', default=1)
     parser.add_argument('--output', type=str, help='path to results output path')

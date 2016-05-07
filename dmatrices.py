@@ -22,7 +22,7 @@ class DMatrices(object):
         for word in words:
             matrix = self.load_matrix(word, smoothed=False)
             if not matrix is None:
-                args.append(word, matrix, eigen_path)
+                args.append((word, matrix, eigen_path))
         if len(args) == 0:
             return
         results = pool.imap(_get_eigenvectors_worker, args)
@@ -167,9 +167,9 @@ def _tr_log(A, eiga, B, eigb):
 def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
-    eigx, vecx = np.linalg.eigh(matrix)
+    eig, vec = np.linalg.eigh(matrix)
     with open(os.path.join(eigen_path, word + '.pkl'), 'w+') as f:
-        pickle.dump((eigx, vecx), f)
+        pickle.dump((eig, vec), f)
 
 if __name__ == '__main__':
     pass
