@@ -9,7 +9,7 @@ from multiprocessing import Pool
 ZERO_THRESH = 1e-12
 
 class DMatrices(object):
-    def __init__(self, matrices_path, test=False, dense=False):
+    def __init__(self, matrices_path, wordmap=None, dense=False):
         self.matrices_path = matrices_path
         self.dense = dense
 
@@ -20,6 +20,8 @@ class DMatrices(object):
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         for word in words:
+            if os.path.exists(os.path.join(eigen_path, word + ".pkl")):
+                continue
             matrix = self.load_matrix(word, smoothed=False)
             if not matrix is None:
                 args.append((word, matrix, eigen_path))
@@ -103,7 +105,7 @@ class DMatrices(object):
             matrix[i,i] = matrix[i,i] + 1e-8
 
 def _load_eigen(path):
-    with open(path, 'r') as f:
+    with open(path, 'rb') as f:
         return pickle.load(f)
 
 def _compute_repres_worker(args):
@@ -168,7 +170,7 @@ def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
     eig, vec = np.linalg.eigh(matrix)
-    with open(os.path.join(eigen_path, word + '.pkl'), 'w+') as f:
+    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
         pickle.dump((eig, vec), f)
 
 if __name__ == '__main__':
