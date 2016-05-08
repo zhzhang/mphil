@@ -42,10 +42,7 @@ class DMatrices(object):
         args = []
         eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
         for i, (a,b) in enumerate(pairs):
-            try:
-                args.append((a, b, eigen_path))
-            except KeyError:
-                args.append(None)
+            args.append((a, b, eigen_path))
         results = pool.map(_compute_repres_worker, args)
         pool.close()
         pool.join()
@@ -109,8 +106,6 @@ def _load_eigen(path):
         return pickle.load(f)
 
 def _compute_repres_worker(args):
-    if args is None:
-        return None
     (word_x, word_y, eigen_path) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
