@@ -6,17 +6,43 @@ import time
 from scipy import linalg
 from multiprocessing import Pool
 
-ZERO_THRESH = 1e-12
+ZERO_THRESH = 1e-12 # Convention is to take x nonzero if x >= ZERO_THRESH
 
 class DMatrices(object):
-    def __init__(self, matrices_path, wordmap=None, dense=False):
+    def __init__(self, matrices_path, dense=False):
         self.matrices_path = matrices_path
         self.dense = dense
+        self._eigen_path = os.path.join(os.path.join(self.matrices_path, 'eigenvectors'))
+        self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
+        self._get_words()
+
+    def _load_wordmap(self, wordmap_path):
+        if not os.path.exists(wordmap_path):
+            self._wordmap = None
+            return
+        wordmap = []
+        with open(wordmap_path, 'r') as f:
+            for line in f:
+                word = line.rstrip('\n').lower()
+                wordmap.append(word)
+        self._wordmap = wordmap
+
+    def _get_words(self):
+        self._words = map(lambda x: os.path.splitext(x)[0],\
+                filter(lambda x: ".dat" in x, os.listdir(self.matrices_path)))
+    
+    def get_avg_density(self):
+        total = 0
+        for word in self._words:
+            matrix = self.load_matrix(word)
+            total += sum(sum(matrix >= ZERO_THRESH))
+        dim = len(matrix)
+        print total / float(len(self._words) * dim * dim)
 
     def get_eigenvectors(self, words, num_processes=1):
         pool = Pool(processes=num_processes)
         args = []
-        eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
+        eigen_path = self._eigen_path
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         for word in words:
@@ -40,13 +66,27 @@ class DMatrices(object):
         self.get_eigenvectors(words)
         pool = Pool(processes=num_processes)
         args = []
-        eigen_path = os.path.join(os.path.dirname(self.matrices_path), 'eigenvectors')
+        eigen_path = self._eigen_path
         for i, (a,b) in enumerate(pairs):
             args.append((a, b, eigen_path))
         results = pool.map(_compute_repres_worker, args)
         pool.close()
         pool.join()
         return results
+
+    def print_eigenvectors(self, word, n=1):
+        word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
+        if not os.path.exists(word_eigen_path):
+            self.get_eigenvectors((word,))
+            if not os.path.exists(word_eigen_path):
+                print "Eigenvectors not found"
+                return
+        with open(word_eigen_path, 'rb') as f:
+            eig, vec = pickle.load(f)
+        for i in range(1,n+1):
+            print "Eigenvalue %e:" % eig[-i]
+            print " ; ".join(map(lambda x: "%s %e" % x, filter(lambda x: x[1] != 0.0,\
+                    sorted(zip(self._wordmap,vec[:,-i]), key=lambda x: x[1], reverse=True))))
 
     @staticmethod
     def _get_basis(*args):
@@ -133,8 +173,8 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     return new_vecx, new_vecy
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
-    trxx = sum([lam_x * np.log(lam_x) if lam_x > ZERO_THRESH else 0.0 for lam_x in eigx])
-    tryy = sum([lam_y * np.log(lam_y) if lam_y > ZERO_THRESH else 0.0 for lam_y in eigy])
+    trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
+    tryy = sum([lam_y * np.log(lam_y) if lam_y >= ZERO_THRESH else 0.0 for lam_y in eigy])
     trxy, tryx = _tr_log(vecx, eigx, vecy, eigy)
     return (trxx - trxy, tryy - tryx)
 
