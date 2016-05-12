@@ -50,12 +50,16 @@ def process_vectors(pairs, vectors_path):
     return results
 
 def evaluate(ground_truth, results):
-    correct = 0
+    # Evaluated by partial correctness.
     true_pos = 0
     false_pos = 0
     true_neg = 0
     false_neg = 0
+    # Strictly correct.
+    correct = 0
+    # Total data points where matrices exist.
     total = 0
+    # Counts for each data type.
     pos = 0
     neg = 0
     for i, pair in enumerate(ground_truth):
@@ -67,7 +71,7 @@ def evaluate(ground_truth, results):
             pos += 1
             if r_ab > r_ba:
                 true_pos += 1
-                if r_ba == 0.0:
+                if r_ba < ZERO_THRESH:
                     correct += 1
             elif r_ab <= r_ba:
                 false_neg += 1
@@ -79,6 +83,11 @@ def evaluate(ground_truth, results):
                 true_neg += 1
     print "Total pairs with complete data: %d out of %d" % (total, len(ground_truth))
     print "Completely correct %d out of %d, %0.1f%%" % (correct, pos, 100 * correct / float(pos))
+    if pos > 0:
+        print "True-Pos: %d = %0.1f%% out of %d" % (true_pos, 100 * true_pos / float(pos), pos)
+    if neg > 0:
+        print "True-Neg: %d = %0.1f%% out of %d" % (true_neg, 100 * true_neg / float(neg), neg)
+    print "F1 score"
 
 
 if __name__ == "__main__":
