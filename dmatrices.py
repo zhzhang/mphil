@@ -10,9 +10,9 @@ ZERO_THRESH = 1e-12 # Convention is to take x nonzero if x >= ZERO_THRESH
 
 class DMatrices(object):
     def __init__(self, matrices_path, dense=False):
-        self.matrices_path = matrices_path
+        self._matrices_path = matrices_path
         self.dense = dense
-        self._eigen_path = os.path.join(os.path.join(self.matrices_path, 'eigenvectors'))
+        self._eigen_path = os.path.join(os.path.join(self._matrices_path, 'eigenvectors'))
         self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
         self._get_words()
 
@@ -28,16 +28,16 @@ class DMatrices(object):
         self._wordmap = wordmap
 
     def _get_words(self):
-        self._words = map(lambda x: os.path.splitext(x)[0],\
-                filter(lambda x: ".dat" in x, os.listdir(self.matrices_path)))
+        self.words = map(lambda x: os.path.splitext(x)[0],\
+                filter(lambda x: ".dat" in x, os.listdir(self._matrices_path)))
     
     def get_avg_density(self):
         total = 0
-        for word in self._words:
+        for word in self.words:
             matrix = self.load_matrix(word)
             total += sum(sum(matrix >= ZERO_THRESH))
         dim = len(matrix)
-        print total / float(len(self._words) * dim * dim)
+        print total / float(len(self.words) * dim * dim)
 
     def get_eigenvectors(self, words, num_processes=1):
         pool = Pool(processes=num_processes)
@@ -61,6 +61,8 @@ class DMatrices(object):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
+            if not (a in self.words and b in self.words):
+                pass
             words.add(a)
             words.add(b)
         self.get_eigenvectors(words)
@@ -103,7 +105,7 @@ class DMatrices(object):
         return basis_map
 
     def load_matrix(self, target, smoothed=False):
-        matrix_path = os.path.join(self.matrices_path, target + '.dat')
+        matrix_path = os.path.join(self._matrices_path, target + '.dat')
         if not os.path.exists(matrix_path):
             return None
         with open(matrix_path, 'rb') as f:
@@ -133,6 +135,8 @@ class DMatrices(object):
                 output[y,x] = entry.value
         if smoothed:
             DMatrices._smooth_matrix(output)
+        if np.trace(output) == 0.0:
+            return output
         return output / np.trace(output)
 
     @staticmethod
