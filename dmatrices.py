@@ -1,7 +1,7 @@
 import cPickle as pickle
-import density_matrix_pb2
 import numpy as np
 import os
+import struct
 import time
 from scipy import linalg
 from multiprocessing import Pool
@@ -14,6 +14,7 @@ class DMatrices(object):
         self.dense = dense
         self._eigen_path = os.path.join(os.path.join(self._matrices_path, 'eigenvectors'))
         self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
+        self._load_parameters(os.path.join(matrices_path, "parameters.txt"))
         self._get_words()
 
     def _load_wordmap(self, wordmap_path):
@@ -22,14 +23,18 @@ class DMatrices(object):
             return
         wordmap = []
         with open(wordmap_path, 'r') as f:
-            for line in f:
-                word = line.rstrip('\n').lower()
+            for line in f.readlines():
+                word = line.lower()
                 wordmap.append(word)
         self._wordmap = wordmap
 
+    def _load_parameters(self, parameters_path):
+        with open(parameters_path, 'r') as f:
+            self.dimension = int(f.readline().split(' ')[1])
+
     def _get_words(self):
         self.words = map(lambda x: os.path.splitext(x)[0],\
-                filter(lambda x: ".dat" in x, os.listdir(self._matrices_path)))
+                filter(lambda x: ".bin" in x, os.listdir(self._matrices_path)))
     
     def get_avg_density(self):
         total = 0
@@ -85,7 +90,7 @@ class DMatrices(object):
                 return
         with open(word_eigen_path, 'rb') as f:
             eig, vec = pickle.load(f)
-        for i in range(1,n+1):
+        for i in xrange(1,n+1):
             print "Eigenvalue %e:" % eig[-i]
             print " ; ".join(map(lambda x: "%s %e" % x, filter(lambda x: x[1] != 0.0,\
                     sorted(zip(self._wordmap,vec[:,-i]), key=lambda x: x[1], reverse=True))))
@@ -105,34 +110,30 @@ class DMatrices(object):
         return basis_map
 
     def load_matrix(self, target, smoothed=False):
-        matrix_path = os.path.join(self._matrices_path, target + '.dat')
+        matrix_path = os.path.join(self._matrices_path, target + '.bin')
         if not os.path.exists(matrix_path):
             return None
-        with open(matrix_path, 'rb') as f:
-            if self.dense:
-                matrix = density_matrix_pb2.DMatrixDense()
-            else:
-                matrix = density_matrix_pb2.DMatrixSparse()
-            matrix.ParseFromString(f.read())
-        dim = matrix.dimension
-        output = np.zeros([dim, dim])
+        matrix_file = open(matrix_path, 'rb')
+        output = np.zeros([self.dimension, self.dimension])
         if self.dense:
             x = 0
-            data_iter = iter(matrix.data)
-            while x < dim:
+            while x < self.dimension:
                 y = x
-                while y < dim:
-                    val = data_iter.next()
+                while y < self.dimension:
+                    (val,) = struct.unpack('>f', matrix_file.read(4))
                     output[x,y] = val
                     output[y,x] = val
                     y += 1
                 x += 1
         else:
-            for entry in matrix.entries:
-                x = entry.x
-                y = entry.y
-                output[x,y] = entry.value
-                output[y,x] = entry.value
+            while True:
+                data = matrix_file.read(12)
+                if len(data) < 12:
+                    break
+                x, y, value = struct.unpack('>iif', data)
+                output[x,y] = value
+                output[y,x] = value
+        matrix_file.close()
         if smoothed:
             DMatrices._smooth_matrix(output)
         if np.trace(output) == 0.0:
@@ -142,7 +143,7 @@ class DMatrices(object):
     @staticmethod
     def _smooth_matrix(matrix):
         dim = matrix.shape[0]
-        for i in range(dim):
+        for i in xrange(dim):
             matrix[i,i] = matrix[i,i] + 1e-8
 
 def _load_eigen(path):
