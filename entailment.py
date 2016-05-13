@@ -23,8 +23,9 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
         if output_path:
             f.write(output_str + "\n")
     vectors_path = os.path.join(matrices_path, "vectors.txt")
-    vector_results = process_vectors(data.keys(), vectors_path)
-    evaluate(data, vector_results)
+    if os.path.exists(vectors_path):
+        vector_results = process_vectors(data.keys(), vectors_path)
+        evaluate(data, vector_results)
 
 def process_vectors(pairs, vectors_path):
     vectors = {}
