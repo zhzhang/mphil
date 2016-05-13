@@ -51,11 +51,10 @@ class DMatrices(object):
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         for word in words:
-            if os.path.exists(os.path.join(eigen_path, word + ".pkl")):
-                continue
-            matrix = self.load_matrix(word, smoothed=False)
-            if not matrix is None:
-                args.append((word, matrix, eigen_path))
+            word = word.lower()
+            if not os.path.exists(os.path.join(eigen_path, word + ".pkl")):
+                matrix_path = os.path.join(self._matrices_path, word + '.bin')
+                args.append((matrix_path, self.dimension, eigen_path, self.dense))
         if len(args) == 0:
             return
         results = pool.imap(_get_eigenvectors_worker, args)
@@ -95,56 +94,45 @@ class DMatrices(object):
             print " ; ".join(map(lambda x: "%s %e" % x, filter(lambda x: x[1] != 0.0,\
                     sorted(zip(self._wordmap,vec[:,-i]), key=lambda x: x[1], reverse=True))))
 
-    @staticmethod
-    def _get_basis(*args):
-        basis = set()
-        for target in args:
-            for a,b in target.keys():
-                basis.add(a)
-                basis.add(b)
-        basis = list(basis)
-        basis.sort()
-        basis_map = {}
-        for i, b in enumerate(basis):
-            basis_map[b] = i
-        return basis_map
-
     def load_matrix(self, target, smoothed=False):
         matrix_path = os.path.join(self._matrices_path, target + '.bin')
-        if not os.path.exists(matrix_path):
-            return None
-        matrix_file = open(matrix_path, 'rb')
-        output = np.zeros([self.dimension, self.dimension])
-        if self.dense:
-            x = 0
-            while x < self.dimension:
-                y = x
-                while y < self.dimension:
-                    (val,) = struct.unpack('>f', matrix_file.read(4))
-                    output[x,y] = val
-                    output[y,x] = val
-                    y += 1
-                x += 1
-        else:
-            while True:
-                data = matrix_file.read(12)
-                if len(data) < 12:
-                    break
-                x, y, value = struct.unpack('>iif', data)
-                output[x,y] = value
-                output[y,x] = value
-        matrix_file.close()
-        if smoothed:
-            DMatrices._smooth_matrix(output)
-        if np.trace(output) == 0.0:
-            return output
-        return output / np.trace(output)
+        _load_matrix(matrix_path, self.dimension, self.dense, smoothed)
 
     @staticmethod
     def _smooth_matrix(matrix):
         dim = matrix.shape[0]
         for i in xrange(dim):
             matrix[i,i] = matrix[i,i] + 1e-8
+
+def _load_matrix(matrix_path, dimension, dense, smoothed):
+    if not os.path.exists(matrix_path):
+        return None
+    matrix_file = open(matrix_path, 'rb')
+    output = np.zeros([dimension, dimension])
+    if dense:
+        x = 0
+        while x < dimension:
+            y = x
+            while y < dimension:
+                (val,) = struct.unpack('>f', matrix_file.read(4))
+                output[x,y] = val
+                output[y,x] = val
+                y += 1
+            x += 1
+    else:
+        while True:
+            data = matrix_file.read(12)
+            if len(data) < 12:
+                break
+            x, y, value = struct.unpack('>iif', data)
+            output[x,y] = value
+            output[y,x] = value
+    matrix_file.close()
+    if smoothed:
+        DMatrices._smooth_matrix(output)
+    if np.trace(output) == 0.0:
+        return output
+    return output / np.trace(output)
 
 def _load_eigen(path):
     with open(path, 'rb') as f:
@@ -161,21 +149,6 @@ def _compute_repres_worker(args):
     #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
     return (1/(1+tmp[0]), 1/(1+tmp[1]))
-
-def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
-    new_basis_map = basis_map_x.copy()
-    index = max(new_basis_map.values())
-    for key in basis_map_y:
-        if not key in new_basis_map:
-            index += 1
-            new_basis_map[key] = index
-    new_vecx = np.zeros([len(new_basis_map), vecx.shape[0]])
-    new_vecx[0:vecx.shape[0], 0:vecx.shape[0]] = vecx
-    new_vecy = np.zeros([len(new_basis_map), vecy.shape[0]])
-    for key in basis_map_y:
-        new_ind = new_basis_map[key]
-        new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
-    return new_vecx, new_vecy
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
     trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
@@ -216,8 +189,12 @@ def _compute_cross_entropy(A, eiga, B, eigb):
     return output_ab, output_ba
 
 def _get_eigenvectors_worker(args):
-    word, matrix, eigen_path = args
+    matrix_path, dimension, eigen_path, dense = args
+    word = os.path.splitext(os.path.basename(matrix_path))[0]
     print "Computing eigenvectors for: %s" % word
+    matrix = _load_matrix(matrix_path, dimension, dense, False)
+    if matrix == None:
+        return
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
