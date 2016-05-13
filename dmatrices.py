@@ -219,13 +219,19 @@ def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
     eig, vec = np.linalg.eigh(matrix)
-    for i in xrange(len(eig)):
-        if eig[i] >= ZERO_THRESH:
-            output_eig = eig[i:]
-            output_vec = vec[:,i:]
-            with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-                pickle.dump((output_eig, output_vec), f)
-            return
+    index = len(eig)
+    total = 0.0
+    while index >= 0 and total < (1.0 - ZERO_THRESH):
+        index -= 1
+        total += eig[index]
+    output_eig = eig[index:]
+    # TODO: output warning here if there is not a clean cutoff in eigenvalues.
+    tmp = sum(np.absolute(eig[:index]))
+    if tmp >= 0.01:
+        print "Warning: total eigenvalue error is greater than 1%"
+    output_vec = vec[:,index:]
+    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+        pickle.dump((output_eig, output_vec), f)
 
 if __name__ == '__main__':
     pass
