@@ -180,38 +180,52 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
 def compute_rel_ent(eigx, vecx, eigy, vecy):
     trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
     tryy = sum([lam_y * np.log(lam_y) if lam_y >= ZERO_THRESH else 0.0 for lam_y in eigy])
-    trxy, tryx = _tr_log(vecx, eigx, vecy, eigy)
+    trxy, tryx = _compute_cross_entropy(vecx, eigx, vecy, eigy)
     return (trxx - trxy, tryy - tryx)
 
-def _tr_log(A, eiga, B, eigb):
+def _compute_cross_entropy(A, eiga, B, eigb):
+    # Project the eigenspaces onto each other.
     AtB = np.dot(A.T, B)
-    tmp_ab = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
-    tmp_ba = np.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
-    output_ab = 0.0
-    for i,lam_b in enumerate(eigb):
-        if np.absolute(tmp_ab[i]) < ZERO_THRESH:
-            continue
-        elif np.absolute(lam_b) < ZERO_THRESH:
-            output_ab = -float('inf')
-            break
-        else:
-            output_ab += tmp_ab[i] * np.log(lam_b)
-    output_ba = 0.0
-    for i,lam_a in enumerate(eiga):
-        if np.absolute(tmp_ba[i]) < ZERO_THRESH:
-            continue
-        elif np.absolute(lam_a) < ZERO_THRESH:
-            return output_ab, -float('inf')
-        else:
-            output_ba += tmp_ba[i] * np.log(lam_a)
+    # Check containment of one eigenspace inside the other.
+    projBA = np.linalg.norm(AtB, axis = 0) # proj of B eigvecs onto A eig space
+    spannedBA = np.all(np.absolute(projBA - np.ones(projBA.shape)) < ZERO_THRESH)
+    projAB = np.linalg.norm(AtB, axis = 1)
+    spannedAB = np.all(np.absolute(projAB - np.ones(projAB.shape)) < ZERO_THRESH)
+    # Compute cross entropy A -> B
+    if spannedAB:
+        output_ab = 0.0
+        tmp_ab = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
+        for i,lam_b in enumerate(eigb):
+            if np.absolute(tmp_ab[i]) < ZERO_THRESH:
+                continue
+            else:
+                output_ab += tmp_ab[i] * np.log(lam_b)
+    else:
+        output_ab = -float('inf')
+    # Compute cross entropy B -> A
+    if spannedBA:
+        tmp_ba = np.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
+        output_ba = 0.0
+        for i,lam_a in enumerate(eiga):
+            if np.absolute(tmp_ba[i]) < ZERO_THRESH:
+                continue
+            else:
+                output_ba += tmp_ba[i] * np.log(lam_a)
+    else:
+        output_ba = -float('inf')
     return output_ab, output_ba
 
 def _get_eigenvectors_worker(args):
     word, matrix, eigen_path = args
     print "Computing eigenvectors for: %s" % word
     eig, vec = np.linalg.eigh(matrix)
-    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-        pickle.dump((eig, vec), f)
+    for i in xrange(len(eig)):
+        if eig[i] >= ZERO_THRESH:
+            output_eig = eig[i:]
+            output_vec = vec[:,i:]
+            with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+                pickle.dump((output_eig, output_vec), f)
+            return
 
 if __name__ == '__main__':
     pass
