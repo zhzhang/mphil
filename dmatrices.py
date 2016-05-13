@@ -69,7 +69,9 @@ class DMatrices(object):
                 pass
             words.add(a)
             words.add(b)
+        t = time.time()
         self.get_eigenvectors(words)
+        print "Eigenvectors computed in %d seconds" % (time.time() - t)
         pool = Pool(processes=num_processes)
         args = []
         eigen_path = self._eigen_path
@@ -96,6 +98,8 @@ class DMatrices(object):
 
     def load_matrix(self, target, smoothed=False):
         matrix_path = os.path.join(self._matrices_path, target + '.bin')
+        if not os.path.exists(matrix_path):
+            return None
         _load_matrix(matrix_path, self.dimension, self.dense, smoothed)
 
     @staticmethod
@@ -105,8 +109,6 @@ class DMatrices(object):
             matrix[i,i] = matrix[i,i] + 1e-8
 
 def _load_matrix(matrix_path, dimension, dense, smoothed):
-    if not os.path.exists(matrix_path):
-        return None
     matrix_file = open(matrix_path, 'rb')
     output = np.zeros([dimension, dimension])
     if dense:
@@ -190,11 +192,9 @@ def _compute_cross_entropy(A, eiga, B, eigb):
 
 def _get_eigenvectors_worker(args):
     matrix_path, dimension, eigen_path, dense = args
-    word = os.path.splitext(os.path.basename(matrix_path))[0]
-    print "Computing eigenvectors for: %s" % word
-    matrix = _load_matrix(matrix_path, dimension, dense, False)
-    if matrix == None:
+    if not os.path.exists(matrix_path):
         return
+    matrix = _load_matrix(matrix_path, dimension, dense, False)
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
@@ -202,9 +202,10 @@ def _get_eigenvectors_worker(args):
         index -= 1
         total += eig[index]
     output_eig = eig[index:]
-    # TODO: output warning here if there is not a clean cutoff in eigenvalues.
     tmp = sum(np.absolute(eig[:index]))
+    word = os.path.splitext(os.path.basename(matrix_path))[0]
     if tmp >= 0.01:
+        # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
         print "Warning: total eigenvalue error is greater than 1%"
     output_vec = vec[:,index:]
     with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
