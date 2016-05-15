@@ -76,7 +76,7 @@ class DMatrices(object):
         args = []
         eigen_path = self._eigen_path
         for i, (a,b) in enumerate(pairs):
-            args.append((a, b, eigen_path))
+            args.append((a, b, eigen_path, self.dense))
         results = pool.map(_compute_repres_worker, args)
         pool.close()
         pool.join()
@@ -100,7 +100,10 @@ class DMatrices(object):
         matrix_path = os.path.join(self._matrices_path, target + '.bin')
         if not os.path.exists(matrix_path):
             return None
-        _load_matrix(matrix_path, self.dimension, self.dense, smoothed)
+        if self.dense:
+            return _load_matrix(matrix_path, self.dimension, smoothed)
+        else:
+            return _load_matrix_sparse(matrix_path, self.dimension, smoothed)
 
     @staticmethod
     def _smooth_matrix(matrix):
@@ -108,47 +111,87 @@ class DMatrices(object):
         for i in xrange(dim):
             matrix[i,i] = matrix[i,i] + 1e-8
 
-def _load_matrix(matrix_path, dimension, dense, smoothed):
+####################
+# HELPER FUNCTIONS #
+####################
+
+def _load_matrix_dense(matrix_path, dimension, smoothed):
     matrix_file = open(matrix_path, 'rb')
-    output = np.zeros([dimension, dimension])
     if dense:
+        output = np.zeros([dimension, dimension])
         x = 0
         while x < dimension:
             y = x
             while y < dimension:
-                (val,) = struct.unpack('>f', matrix_file.read(4))
-                output[x,y] = val
-                output[y,x] = val
+                (value,) = struct.unpack('>f', matrix_file.read(4))
+                output[x,y] = value
+                output[y,x] = value
                 y += 1
             x += 1
-    else:
-        while True:
-            data = matrix_file.read(12)
-            if len(data) < 12:
-                break
-            x, y, value = struct.unpack('>iif', data)
-            output[x,y] = value
-            output[y,x] = value
+    if smoothed:
+        DMatrices._smooth_matrix(output)
+    return output / np.trace(output)
+
+def _load_matrix_sparse(matrix_path, dimension, smoothed):
+    matrix_data = {}
+    matrix_file = open(matrix_path, 'rb')
+    while True:
+        data = matrix_file.read(12)
+        if len(data) < 12:
+            break
+        x, y, value = struct.unpack('>iif', data)
+        matrix_data[(x,y)] = value
+    basis = _get_basis(matrix_data)
+    output = np.zeros([len(basis), len(basis)])
+    for x,y in matrix_data:
+        xind = basis[x]
+        yind = basis[y]
+        output[xind,yind] = matrix_data[(x,y)]
+        output[yind,xind] = matrix_data[(x,y)]
     matrix_file.close()
     if smoothed:
         DMatrices._smooth_matrix(output)
-    if np.trace(output) == 0.0:
-        return output
-    return output / np.trace(output)
+    return output / np.trace(output), basis
+
+def _get_basis(matrix_data):
+    basis_set = set()
+    for x,y in matrix_data:
+        basis_set.add(x)
+        basis_set.add(y)
+    return dict([(t[1], t[0]) for t in enumerate(sorted(list(basis_set)))])
 
 def _load_eigen(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
+    new_basis_map = basis_map_x.copy()
+    index = max(new_basis_map.values())
+    for key in basis_map_y:
+        if not key in new_basis_map:
+            index += 1
+            new_basis_map[key] = index
+    new_vecx = np.zeros([len(new_basis_map), vecx.shape[1]])
+    new_vecx[0:vecx.shape[0], :] = vecx
+    new_vecy = np.zeros([len(new_basis_map), vecy.shape[1]])
+    for key in basis_map_y:
+        new_ind = new_basis_map[key]
+        new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
+    return new_vecx, new_vecy
+
 def _compute_repres_worker(args):
-    (word_x, word_y, eigen_path) = args
+    (word_x, word_y, eigen_path, dense) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
-    eigx, vecx = _load_eigen(pathx)
-    eigy, vecy = _load_eigen(pathy)
-    #vecx, vecy = _merge_basis(basis_map_x, basis_map_y, vecx, vecy)
+    if dense:
+        eigx, vecx = _load_eigen(pathx)
+        eigy, vecy = _load_eigen(pathy)
+    else:
+        eigx, vecx, basisx = _load_eigen(pathx)
+        eigy, vecy, basisy  = _load_eigen(pathy)
+        vecx, vecy = _merge_basis(basisx, basisy, vecx, vecy)
     tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
     return (1/(1+tmp[0]), 1/(1+tmp[1]))
 
@@ -194,7 +237,10 @@ def _get_eigenvectors_worker(args):
     matrix_path, dimension, eigen_path, dense = args
     if not os.path.exists(matrix_path):
         return
-    matrix = _load_matrix(matrix_path, dimension, dense, False)
+    if dense:
+        matrix = _load_matrix_dense(matrix_path, dimension, False)
+    else:
+        matrix, basis = _load_matrix_sparse(matrix_path, dimension, False)
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
@@ -209,7 +255,10 @@ def _get_eigenvectors_worker(args):
         print "Warning: total eigenvalue error is greater than 1%"
     output_vec = vec[:,index:]
     with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-        pickle.dump((output_eig, output_vec), f)
+        if dense:
+            pickle.dump((output_eig, output_vec), f)
+        else:
+            pickle.dump((output_eig, output_vec, basis), f)
 
 if __name__ == '__main__':
     pass
