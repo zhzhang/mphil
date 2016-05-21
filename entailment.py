@@ -14,14 +14,13 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
     print "Representativeness computed in %d seconds" % (time.time() - t)
     evaluate(data, results)
     if output_path:
-        f = open(output_path, 'w')
-    for i, pair in enumerate(data):
-        if results[i]:
-            output_str = "%s %s %0.5f %0.5f" % (pair + results[i])
-        else:
-            output_str = "%s %s" % (pair)
-        if output_path:
-            f.write(output_str + "\n")
+        with open(output_path, 'w') as f:
+            for i, pair in enumerate(data):
+                if results[i]:
+                    output_str = "%s %s %0.6f %0.6f" % (pair + results[i])
+                else:
+                    output_str = "%s %s" % (pair)
+                f.write(output_str + "\n")
     vectors_path = os.path.join(matrices_path, "vectors.txt")
     if os.path.exists(vectors_path):
         vector_results = process_vectors(data.keys(), vectors_path)
@@ -63,14 +62,17 @@ def evaluate(ground_truth, results):
     # Counts for each data type.
     pos = 0
     neg = 0
+    nonzero = 0
     for i, pair in enumerate(ground_truth):
         if results[i] == None:
             continue
         total += 1
         r_ab, r_ba = results[i]
+        if r_ab >= ZERO_THRESH or r_ba >= ZERO_THRESH:
+            nonzero += 1
         if ground_truth[pair][0] == "hyper":
             pos += 1
-            if r_ab > r_ba:
+            if r_ab > r_ba and r_ab >= ZERO_THRESH:
                 true_pos += 1
                 if r_ba < ZERO_THRESH:
                     correct += 1
@@ -78,17 +80,15 @@ def evaluate(ground_truth, results):
                 false_neg += 1
         if ground_truth[pair][0] == "random_n":
             neg += 1
-            if r_ab > r_ba:
+            if r_ab > r_ba and r_ab >= ZERO_THRESH:
                 false_pos += 1
             elif r_ab <= r_ba:
                 true_neg += 1
     print "Total pairs with complete data: %d out of %d" % (total, len(ground_truth))
+    print "Total pairs with nonzero data: %d out of %d" % (nonzero, len(ground_truth))
     print "Completely correct %d out of %d, %0.1f%%" % (correct, pos, 100 * correct / float(pos))
-    if pos > 0:
-        print "True-Pos: %d = %0.1f%% out of %d" % (true_pos, 100 * true_pos / float(pos), pos)
-    if neg > 0:
-        print "True-Neg: %d = %0.1f%% out of %d" % (true_neg, 100 * true_neg / float(neg), neg)
-    print "F1 score"
+    print "TP: %d  FP: %d  TN: %d  FN: %d" % (true_pos, false_pos, true_neg, false_neg)
+    print "...out of POS: %d  NEG: %d" % (pos, neg)
 
 
 if __name__ == "__main__":
