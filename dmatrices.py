@@ -1,5 +1,5 @@
 import cPickle as pickle
-import scipy as sp
+import numpy as np
 import os
 import struct
 import time
@@ -124,7 +124,7 @@ class DMatrices(object):
 def _load_matrix_dense(matrix_path, dimension, smoothed):
     matrix_file = open(matrix_path, 'rb')
     if dense:
-        output = sp.zeros([dimension, dimension])
+        output = np.zeros([dimension, dimension])
         x = 0
         while x < dimension:
             y = x
@@ -136,7 +136,7 @@ def _load_matrix_dense(matrix_path, dimension, smoothed):
             x += 1
     if smoothed:
         DMatrices._smooth_matrix(output)
-    return output / sp.trace(output)
+    return output / np.trace(output)
 
 def _load_matrix_sparse(matrix_path, dimension, smoothed):
     matrix_data = {}
@@ -148,7 +148,7 @@ def _load_matrix_sparse(matrix_path, dimension, smoothed):
         x, y, value = struct.unpack('>iif', data)
         matrix_data[(x,y)] = value
     basis = _get_basis(matrix_data)
-    output = sp.zeros([len(basis), len(basis)])
+    output = np.zeros([len(basis), len(basis)])
     for x,y in matrix_data:
         xind = basis[x]
         yind = basis[y]
@@ -157,7 +157,7 @@ def _load_matrix_sparse(matrix_path, dimension, smoothed):
     matrix_file.close()
     if smoothed:
         DMatrices._smooth_matrix(output)
-    return output / sp.trace(output), basis
+    return output / np.trace(output), basis
 
 def _get_basis(matrix_data):
     basis_set = set()
@@ -177,9 +177,9 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
         if not key in new_basis_map:
             index += 1
             new_basis_map[key] = index
-    new_vecx = sp.zeros([len(new_basis_map), vecx.shape[1]])
+    new_vecx = np.zeros([len(new_basis_map), vecx.shape[1]])
     new_vecx[0:vecx.shape[0], :] = vecx
-    new_vecy = sp.zeros([len(new_basis_map), vecy.shape[1]])
+    new_vecy = np.zeros([len(new_basis_map), vecy.shape[1]])
     for key in basis_map_y:
         new_ind = new_basis_map[key]
         new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
@@ -205,56 +205,47 @@ def _compute_measure_worker(args):
         return compute_weeds_prec(eigx, vecx, eigy, vecy)
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
-    trxx = sum([lam_x * sp.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
-    tryy = sum([lam_y * sp.log(lam_y) if lam_y >= ZERO_THRESH else 0.0 for lam_y in eigy])
+    trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
+    tryy = sum([lam_y * np.log(lam_y) if lam_y >= ZERO_THRESH else 0.0 for lam_y in eigy])
     trxy, tryx = _compute_cross_entropy(vecx, eigx, vecy, eigy)
     return (trxx - trxy, tryy - tryx)
 
 def _compute_cross_entropy(A, eiga, B, eigb):
     # Project the eigenspaces onto each other.
-    AtB = sp.dot(A.T, B)
+    AtB = np.dot(A.T, B)
     # Check containment of one eigenspace inside the other.
-    projBA = sp.linalg.norm(AtB, axis = 0) # proj of B eigvecs onto A eig space
-    spannedBA = sp.all(sp.absolute(projBA - sp.ones(projBA.shape)) < ZERO_THRESH)
-    projAB = sp.linalg.norm(AtB, axis = 1)
-    spannedAB = sp.all(sp.absolute(projAB - sp.ones(projAB.shape)) < ZERO_THRESH)
+    projBA = np.linalg.norm(AtB, axis = 0) # proj of B eigvecs onto A eig space
+    spannedBA = np.all(np.absolute(projBA - np.ones(projBA.shape)) < ZERO_THRESH)
+    projAB = np.linalg.norm(AtB, axis = 1)
+    spannedAB = np.all(np.absolute(projAB - np.ones(projAB.shape)) < ZERO_THRESH)
     # Compute cross entropy A -> B
     if spannedAB:
         output_ab = 0.0
-        tmp_ab = sp.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
+        tmp_ab = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
         for i,lam_b in enumerate(eigb):
-            if sp.absolute(tmp_ab[i]) < ZERO_THRESH:
+            if np.absolute(tmp_ab[i]) < ZERO_THRESH:
                 continue
             else:
-                output_ab += tmp_ab[i] * sp.log(lam_b)
+                output_ab += tmp_ab[i] * np.log(lam_b)
     else:
         output_ab = -float('inf')
     # Compute cross entropy B -> A
     if spannedBA:
-        tmp_ba = sp.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
+        tmp_ba = np.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
         output_ba = 0.0
         for i,lam_a in enumerate(eiga):
-            if sp.absolute(tmp_ba[i]) < ZERO_THRESH:
+            if np.absolute(tmp_ba[i]) < ZERO_THRESH:
                 continue
             else:
-                output_ba += tmp_ba[i] * sp.log(lam_a)
+                output_ba += tmp_ba[i] * np.log(lam_a)
     else:
         output_ba = -float('inf')
     return output_ab, output_ba
 
 def compute_weeds_prec(eiga, A, eigb, B):
     # Project the eigenspaces onto each other.
-    AtB = sp.dot(A.T, B)
-    projAB = sp.linalg.norm(AtB, axis = 1)
-    numerator = sum([projAB[i] * eiga[i] for i in range(len(eiga))])
-    # Denominator
-    denominator = sum(eiga)
-    return numerator / denominator
-
-def compute_clarke_de(eiga, A, eigb, B):
-    # Project the eigenspaces onto each other.
-    AtB = sp.dot(A.T, B)
-    projAB = sp.linalg.norm(AtB, axis = 1)
+    AtB = np.dot(A.T, B)
+    projAB = np.linalg.norm(AtB, axis = 1)
     numerator = sum([projAB[i] * eiga[i] for i in range(len(eiga))])
     # Denominator
     denominator = sum(eiga)
@@ -268,14 +259,14 @@ def _get_eigenvectors_worker(args):
         matrix = _load_matrix_dense(matrix_path, dimension, False)
     else:
         matrix, basis = _load_matrix_sparse(matrix_path, dimension, False)
-    eig, vec = sp.linalg.eigh(matrix)
+    eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
     while index >= 0 and total < (1.0 - ZERO_THRESH):
         index -= 1
         total += eig[index]
     output_eig = eig[index:]
-    tmp = sum(sp.absolute(eig[:index]))
+    tmp = sum(np.absolute(eig[:index]))
     word = os.path.splitext(os.path.basename(matrix_path))[0]
     if tmp >= 0.01:
         # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
