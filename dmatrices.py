@@ -61,7 +61,7 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def repres(self, pairs, num_processes=1):
+    def _compute_measure(self, pairs, measure, num_processes):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -74,13 +74,19 @@ class DMatrices(object):
         print "Eigenvectors computed in %d seconds" % (time.time() - t)
         pool = Pool(processes=num_processes)
         args = []
-        eigen_path = self._eigen_path
         for i, (a,b) in enumerate(pairs):
-            args.append((a, b, eigen_path, self.dense))
-        results = pool.map(_compute_repres_worker, args)
+            args.append((a, b, measure, self._eigen_path, self.dense))
+        results = pool.map(_compute_measure_worker, args)
         pool.close()
         pool.join()
         return results
+
+
+    def repres(self, pairs, num_processes=1):
+        return self._compute_measure(pairs, "repres", num_processes)
+
+    def weeds_prec(self, pairs, num_processes=1):
+        return self._compute_measure(pairs, "weedsprec", num_processes)
 
     def print_eigenvectors(self, word, n=1):
         word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
@@ -179,8 +185,8 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
         new_vecy[new_ind,:] = vecy[basis_map_y[key],:]
     return new_vecx, new_vecy
 
-def _compute_repres_worker(args):
-    (word_x, word_y, eigen_path, dense) = args
+def _compute_measure_worker(args):
+    (word_x, word_y, measure, eigen_path, dense) = args
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
@@ -192,8 +198,11 @@ def _compute_repres_worker(args):
         eigx, vecx, basisx = _load_eigen(pathx)
         eigy, vecy, basisy  = _load_eigen(pathy)
         vecx, vecy = _merge_basis(basisx, basisy, vecx, vecy)
-    tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
-    return (1/(1+tmp[0]), 1/(1+tmp[1]))
+    if measure == "repres":
+        tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
+        return (1/(1+tmp[0]), 1/(1+tmp[1]))
+    elif measure == "weedsprec":
+        return compute_weeds_prec(eigx, vecx, eigy, vecy)
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
     trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
@@ -232,6 +241,15 @@ def _compute_cross_entropy(A, eiga, B, eigb):
     else:
         output_ba = -float('inf')
     return output_ab, output_ba
+
+def compute_weeds_prec(eiga, A, eigb, B):
+    # Project the eigenspaces onto each other.
+    AtB = np.dot(A.T, B)
+    projAB = np.linalg.norm(AtB, axis = 1)
+    numerator = sum([projAB[i] * eiga[i] for i in range(len(eiga))])
+    # Denominator
+    denominator = sum(eiga)
+    return numerator / denominator
 
 def _get_eigenvectors_worker(args):
     matrix_path, dimension, eigen_path, dense = args
