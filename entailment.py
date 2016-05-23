@@ -78,7 +78,7 @@ def evaluate(ground_truth, results):
                     correct += 1
             elif r_ab <= r_ba:
                 false_neg += 1
-        if ground_truth[pair][0] == "random_n":
+        elif ground_truth[pair][0] == "random-n":
             neg += 1
             if r_ab > r_ba and r_ab >= ZERO_THRESH:
                 false_pos += 1
