@@ -44,6 +44,24 @@ class DMatrices(object):
         dim = len(matrix)
         print total / float(len(self.words) * dim * dim)
 
+    def get_stats(self):
+        rank = []
+        features = []
+        self.get_eigenvectors(self.words)
+        for word in self.words:
+            path = os.path.join(self._eigen_path, word + '.pkl')
+            if not os.path.exists(path):
+                continue
+            if self.dense:
+                eig, vec = _load_eigen(path)
+            else:
+                eig, vec, basis = _load_eigen(path)
+                features.append(len(basis))
+            rank.append(len(eig))
+        print "RANK avg %0.2f std %0.2f" % (np.mean(rank), np.std(rank))
+        if not self.dense:
+            print "FEATURES avg %0.2f std %0.2f" % (np.mean(features), np.std(features))
+
     def get_eigenvectors(self, words, num_processes=1):
         pool = Pool(processes=num_processes)
         args = []
@@ -80,7 +98,6 @@ class DMatrices(object):
         pool.close()
         pool.join()
         return results
-
 
     def repres(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "repres", num_processes)
