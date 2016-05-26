@@ -9,7 +9,10 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
     with open(path, 'r') as f:
         data = pickle.load(f)
     dm = DMatrices(matrices_path, dense=dense)
+    weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
+    print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     t = time.time()
+    #dm.clarke_de(data.keys(), num_processes=num_processes)
     results = dm.repres(data.keys(), num_processes=num_processes)
     print "Representativeness computed in %d seconds" % (time.time() - t)
     evaluate(data, results)
@@ -21,8 +24,6 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
                 else:
                     output_str = "%s %s" % (pair)
                 f.write(output_str + "\n")
-    weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
-    print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     vectors_path = os.path.join(matrices_path, "vectors.txt")
     if os.path.exists(vectors_path):
         vector_results = process_vectors(data.keys(), vectors_path)
@@ -93,17 +94,29 @@ def evaluate(ground_truth, results):
     print "...out of POS: %d  NEG: %d" % (pos, neg)
 
 def get_avg_precision(ground_truth, results):
-    val_label_pairs = zip(results, [ground_truth[key] for key in ground_truth])
-    val_label_pairs = sorted(val_label_pairs, reverse=True)
-    correct = 0
-    total = 0.0
-    for k, (val, label) in enumerate(val_label_pairs):
-        if label[0] == "hyper":
-            correct += 1
-            total += correct / float(k+1)
-        elif val == None:
-            break
-    return total / k
+    concept_result_map = {}
+    for i, pair in enumerate(ground_truth):
+        if pair[0] in concept_result_map:
+            concept_result_map[pair[0]].append((results[i], ground_truth[pair][0]))
+        else:
+            concept_result_map[pair[0]] = [(results[i], ground_truth[pair][0])]
+    final = 0.0
+    total_concepts = 0
+    for concept in concept_result_map:
+        val_label_pairs = concept_result_map[concept]
+        val_label_pairs = sorted(val_label_pairs, reverse=True)
+        correct = 0
+        total = 0.0
+        for k, (val, label) in enumerate(val_label_pairs):
+            if label == "hyper":
+                correct += 1
+                total += correct / float(k+1)
+            elif val == None:
+                break
+        if k > 0:
+            total_concepts += 1
+            final += total / k
+    return final / total_concepts
 
 
 if __name__ == "__main__":
