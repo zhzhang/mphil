@@ -140,17 +140,16 @@ class DMatrices(object):
 
 def _load_matrix_dense(matrix_path, dimension, smoothed):
     matrix_file = open(matrix_path, 'rb')
-    if dense:
-        output = np.zeros([dimension, dimension])
-        x = 0
-        while x < dimension:
-            y = x
-            while y < dimension:
-                (value,) = struct.unpack('>f', matrix_file.read(4))
-                output[x,y] = value
-                output[y,x] = value
-                y += 1
-            x += 1
+    output = np.zeros([dimension, dimension])
+    x = 0
+    while x < dimension:
+        y = x
+        while y < dimension:
+            (value,) = struct.unpack('>f', matrix_file.read(4))
+            output[x,y] = value
+            output[y,x] = value
+            y += 1
+        x += 1
     if smoothed:
         DMatrices._smooth_matrix(output)
     return output / np.trace(output)
@@ -287,11 +286,16 @@ def _get_eigenvectors_worker(args):
     word = os.path.splitext(os.path.basename(matrix_path))[0]
     if tmp >= 0.01:
         # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
-        print "Warning: total eigenvalue error is greater than 1%"
+        print "Warning: total eigenvalue error is greater than 0.01 for word %s" % word
+    if index > 0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
+        print "Warning: cutoff %0.2f not sharp for word %s" % (np.absolute(output_eig[0] / eig[index-1]), word)
+    if output_eig[0] < 0:
+        print "Warning: negative eigenvalue included for word %s" % word
     output_vec = vec[:,index:]
     with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
         if dense:
-            pickle.dump((output_eig, output_vec), f)
+            #pickle.dump((output_eig, output_vec), f)
+            pickle.dump((eig, vec), f)
         else:
             pickle.dump((output_eig, output_vec, basis), f)
 
