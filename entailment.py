@@ -21,6 +21,8 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
                 else:
                     output_str = "%s %s" % (pair)
                 f.write(output_str + "\n")
+    weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
+    print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     vectors_path = os.path.join(matrices_path, "vectors.txt")
     if os.path.exists(vectors_path):
         vector_results = process_vectors(data.keys(), vectors_path)
@@ -89,6 +91,19 @@ def evaluate(ground_truth, results):
     print "Completely correct %d out of %d, %0.1f%%" % (correct, pos, 100 * correct / float(pos))
     print "TP: %d  FP: %d  TN: %d  FN: %d" % (true_pos, false_pos, true_neg, false_neg)
     print "...out of POS: %d  NEG: %d" % (pos, neg)
+
+def get_avg_precision(ground_truth, results):
+    val_label_pairs = zip(results, [ground_truth[key] for key in ground_truth])
+    val_label_pairs = sorted(val_label_pairs, reverse=True)
+    correct = 0
+    total = 0.0
+    for k, (val, label) in enumerate(val_label_pairs):
+        if label[0] == "hyper":
+            correct += 1
+            total += correct / float(k+1)
+        elif val == None:
+            break
+    return total / k
 
 
 if __name__ == "__main__":
