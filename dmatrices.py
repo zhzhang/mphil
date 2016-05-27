@@ -105,6 +105,9 @@ class DMatrices(object):
     def weeds_prec(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "weedsprec", num_processes)
 
+    def clarke_de(self, pairs, num_processes=1):
+        return self._compute_measure(pairs, "clarkede", num_processes)
+
     def print_eigenvectors(self, word, n=1):
         word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
         if not os.path.exists(word_eigen_path):
@@ -153,7 +156,7 @@ def _load_matrix_dense(matrix_path, dimension, smoothed):
             x += 1
     if smoothed:
         DMatrices._smooth_matrix(output)
-    return output / np.trace(output)
+    return output / np.trace(output), np.trace(output)
 
 def _load_matrix_sparse(matrix_path, dimension, smoothed):
     matrix_data = {}
@@ -174,7 +177,7 @@ def _load_matrix_sparse(matrix_path, dimension, smoothed):
     matrix_file.close()
     if smoothed:
         DMatrices._smooth_matrix(output)
-    return output / np.trace(output), basis
+    return output / np.trace(output), np.trace(output), basis
 
 def _get_basis(matrix_data):
     basis_set = set()
@@ -182,6 +185,33 @@ def _get_basis(matrix_data):
         basis_set.add(x)
         basis_set.add(y)
     return dict([(t[1], t[0]) for t in enumerate(sorted(list(basis_set)))])
+
+def _get_eigenvectors_worker(args):
+    matrix_path, dimension, eigen_path, dense = args
+    if not os.path.exists(matrix_path):
+        return
+    if dense:
+        matrix, norm = _load_matrix_dense(matrix_path, dimension, False)
+    else:
+        matrix, norm, basis = _load_matrix_sparse(matrix_path, dimension, False)
+    eig, vec = np.linalg.eigh(matrix)
+    index = len(eig)
+    total = 0.0
+    while index >= 0 and total < (1.0 - ZERO_THRESH):
+        index -= 1
+        total += eig[index]
+    output_eig = eig[index:]
+    tmp = sum(np.absolute(eig[:index]))
+    word = os.path.splitext(os.path.basename(matrix_path))[0]
+    if tmp >= 0.01:
+        # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
+        print "Warning: total eigenvalue error is greater than 1%"
+    output_vec = vec[:,index:]
+    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+        if dense:
+            pickle.dump((output_eig, output_vec, norm), f)
+        else:
+            pickle.dump((output_eig, output_vec, norm, basis), f)
 
 def _load_eigen(path):
     with open(path, 'rb') as f:
@@ -209,17 +239,23 @@ def _compute_measure_worker(args):
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
     if dense:
-        eigx, vecx = _load_eigen(pathx)
-        eigy, vecy = _load_eigen(pathy)
+        eigx, vecx, normx = _load_eigen(pathx)
+        eigy, vecy, normy = _load_eigen(pathy)
     else:
-        eigx, vecx, basisx = _load_eigen(pathx)
-        eigy, vecy, basisy  = _load_eigen(pathy)
+        eigx, vecx, normx, basisx = _load_eigen(pathx)
+        eigy, vecy, normy, basisy  = _load_eigen(pathy)
         vecx, vecy = _merge_basis(basisx, basisy, vecx, vecy)
     if measure == "repres":
         tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
         return (1/(1+tmp[0]), 1/(1+tmp[1]))
     elif measure == "weedsprec":
         return compute_weeds_prec(eigx, vecx, eigy, vecy)
+    elif measure == "clarkede":
+        return compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
+
+############
+# MEASURES #
+############
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
     trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
@@ -260,40 +296,20 @@ def _compute_cross_entropy(A, eiga, B, eigb):
     return output_ab, output_ba
 
 def compute_weeds_prec(eiga, A, eigb, B):
-    # Project the eigenspaces onto each other.
     AtB = np.dot(A.T, B)
     projAB = np.linalg.norm(AtB, axis = 1)
     numerator = sum([projAB[i] * eiga[i] for i in range(len(eiga))])
-    # Denominator
     denominator = sum(eiga)
     return numerator / denominator
 
-def _get_eigenvectors_worker(args):
-    matrix_path, dimension, eigen_path, dense = args
-    if not os.path.exists(matrix_path):
-        return
-    if dense:
-        matrix = _load_matrix_dense(matrix_path, dimension, False)
-    else:
-        matrix, basis = _load_matrix_sparse(matrix_path, dimension, False)
-    eig, vec = np.linalg.eigh(matrix)
-    index = len(eig)
-    total = 0.0
-    while index >= 0 and total < (1.0 - ZERO_THRESH):
-        index -= 1
-        total += eig[index]
-    output_eig = eig[index:]
-    tmp = sum(np.absolute(eig[:index]))
-    word = os.path.splitext(os.path.basename(matrix_path))[0]
-    if tmp >= 0.01:
-        # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
-        print "Warning: total eigenvalue error is greater than 1%"
-    output_vec = vec[:,index:]
-    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-        if dense:
-            pickle.dump((output_eig, output_vec), f)
-        else:
-            pickle.dump((output_eig, output_vec, basis), f)
+def compute_clarke_de(eiga, A, norma, eigb, B, normb):
+    AtB = np.dot(A.T, B)
+    eiga = norma * eiga
+    eigb = normb * eigb
+    tmpb = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
+    numerator = sum([min(pair) for pair in zip(tmpb, eigb)])
+    denominator = sum(eiga)
+    return numerator / denominator
 
 if __name__ == '__main__':
     pass
