@@ -19,7 +19,7 @@ def process_bless(path, output_path, subsample=1):
     with open(path, 'r') as f:
         for line in f:
             con, relu, cla, rel = parse_line(line)
-            if rel == 'hyper':
+            if rel == 'hyper' or rel == 'coord' or rel == 'mero':
                 output[(con, relu)] = (rel, cla)
             elif rel == 'random-n':
                 count += 1
