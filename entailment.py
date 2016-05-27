@@ -13,6 +13,8 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
     print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     clarke_de = dm.clarke_de(data.keys(), num_processes=num_processes)
     print "AP ClarkeDE: %0.3f" % get_avg_precision(data, clarke_de)
+    inv_cl = dm.inv_cl(data.keys(), num_processes=num_processes)
+    print "AP InvCL: %0.3f" % get_avg_precision(data, clarke_de)
     t = time.time()
     results = dm.repres(data.keys(), num_processes=num_processes)
     print "Representativeness computed in %d seconds" % (time.time() - t)

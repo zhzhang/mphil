@@ -108,6 +108,9 @@ class DMatrices(object):
     def clarke_de(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "clarkede", num_processes)
 
+    def inv_cl(self, pairs, num_processes=1):
+        return self._compute_measure(pairs, "invcl", num_processes)
+
     def print_eigenvectors(self, word, n=1):
         word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
         if not os.path.exists(word_eigen_path):
@@ -252,6 +255,10 @@ def _compute_measure_worker(args):
         return compute_weeds_prec(eigx, vecx, eigy, vecy)
     elif measure == "clarkede":
         return compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
+    elif measure == "invcl":
+        forward = compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
+        backward = compute_clarke_de(eigy, vecy, normy, eigx, vecx, normx)
+        return np.sqrt(forward * (1 - backward))
 
 ############
 # MEASURES #
@@ -310,6 +317,11 @@ def compute_clarke_de(eiga, A, norma, eigb, B, normb):
     numerator = sum([min(pair) for pair in zip(tmpb, eigb)])
     denominator = sum(eiga)
     return numerator / denominator
+
+def compute_fidelity(eiga, A, eigb, B):
+    AtB = np.dot(A.T, B)
+    eigsqrt = np.sqrt(np.outer(eiga, eigb))
+    return np.einsum('ij,ij->', AtB, eigsqrt)
 
 if __name__ == '__main__':
     pass
