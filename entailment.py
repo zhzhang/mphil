@@ -9,14 +9,16 @@ def process_data(path, matrices_path, num_processes, output_path, dense):
     with open(path, 'r') as f:
         data = pickle.load(f)
     dm = DMatrices(matrices_path, dense=dense)
+    """
     weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
     print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     clarke_de = dm.clarke_de(data.keys(), num_processes=num_processes)
     print "AP ClarkeDE: %0.3f" % get_avg_precision(data, clarke_de)
     inv_cl = dm.inv_cl(data.keys(), num_processes=num_processes)
     print "AP InvCL: %0.3f" % get_avg_precision(data, clarke_de)
+    """
     t = time.time()
-    results = dm.repres(data.keys(), num_processes=num_processes)
+    results = dm.repres(data.keys(), .99, num_processes=num_processes)
     print "Representativeness computed in %d seconds" % (time.time() - t)
     evaluate(data, results)
     if output_path:

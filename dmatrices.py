@@ -79,7 +79,7 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def _compute_measure(self, pairs, measure, num_processes):
+    def repres(self, pairs, alpha, num_processes=1):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -93,23 +93,11 @@ class DMatrices(object):
         pool = Pool(processes=num_processes)
         args = []
         for i, (a,b) in enumerate(pairs):
-            args.append((a, b, measure, self._eigen_path, self.dense))
+            args.append((a, b, self._matrices_path, self.dense, alpha))
         results = pool.map(_compute_measure_worker, args)
         pool.close()
         pool.join()
         return results
-
-    def repres(self, pairs, num_processes=1):
-        return self._compute_measure(pairs, "repres", num_processes)
-
-    def weeds_prec(self, pairs, num_processes=1):
-        return self._compute_measure(pairs, "weedsprec", num_processes)
-
-    def clarke_de(self, pairs, num_processes=1):
-        return self._compute_measure(pairs, "clarkede", num_processes)
-
-    def inv_cl(self, pairs, num_processes=1):
-        return self._compute_measure(pairs, "invcl", num_processes)
 
     def print_eigenvectors(self, word, n=1):
         word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
@@ -179,8 +167,53 @@ def _load_matrix_sparse(matrix_path, smoothed):
     matrix_file.close()
     if smoothed:
         DMatrices._smooth_matrix(output)
-    print output
     return output / np.trace(output), np.trace(output), basis
+
+def _load_skew_sparse(matrix_path_x, matrix_path_y, alpha):
+    skew = 1 - alpha
+    matrix_data_x = {}
+    matrix_file = open(matrix_path_x, 'rb')
+    norm_x = 0.0
+    while True:
+        data = matrix_file.read(12)
+        if len(data) < 12:
+            break
+        x, y, value = struct.unpack('>iif', data)
+        if x == y:
+            norm_x += value
+        matrix_data_x[(x,y)] = value
+    matrix_file.close()
+    matrix_file = open(matrix_path_y, 'rb')
+    matrix_data_y = {}
+    norm_y = 0.0
+    while True:
+        data = matrix_file.read(12)
+        if len(data) < 12:
+            break
+        x, y, value = struct.unpack('>iif', data)
+        if x == y:
+            norm_y += value
+        matrix_data_y[(x,y)] = value
+    matrix_file.close()
+
+    indices = set(matrix_data_x.keys() + matrix_data_y.keys())
+    basis = _get_basis(indices)
+
+    output_xy = np.zeros([len(basis), len(basis)])
+    output_yx = np.zeros([len(basis), len(basis)])
+    for x,y in indices:
+        xind = basis[x]
+        yind = basis[y]
+        coord = (x,y)
+        val_x = matrix_data_x[coord] if coord in matrix_data_x else 0.0
+        val_y = matrix_data_y[coord] if coord in matrix_data_y else 0.0
+        val_xy = skew * val_x / norm_x + (1-skew) * val_y / norm_y
+        val_yx = skew * val_y / norm_y + (1-skew) * val_x / norm_x
+        output_xy[xind,yind] = val_xy
+        output_xy[yind,xind] = val_xy
+        output_yx[xind,yind] = val_yx
+        output_yx[yind,xind] = val_yx
+    return output_xy / np.trace(output_xy), output_yx / np.trace(output_yx), basis
 
 def _get_basis(matrix_data):
     basis_set = set()
@@ -197,6 +230,15 @@ def _get_eigenvectors_worker(args):
         matrix, norm = _load_matrix_dense(matrix_path, dimension, False)
     else:
         matrix, norm, basis = _load_matrix_sparse(matrix_path, False)
+    word = os.path.splitext(os.path.basename(matrix_path))[0]
+    output_eig, output_vec = _compute_eigenvectors(matrix, word)
+    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+        if dense:
+            pickle.dump((output_eig, output_vec, norm), f)
+        else:
+            pickle.dump((output_eig, output_vec, norm, basis), f)
+
+def _compute_eigenvectors(matrix, word):
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
@@ -205,20 +247,15 @@ def _get_eigenvectors_worker(args):
         total += eig[index]
     output_eig = eig[index:]
     tmp = sum(np.absolute(eig[:index]))
-    word = os.path.splitext(os.path.basename(matrix_path))[0]
     if tmp >= 0.01:
         # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
         print "Warning: total eigenvalue error is greater than 1%"
-    if index > 0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
+    if index > 0 and eig[index-1] > 0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
         print "Warning: cutoff %0.2f not sharp for word %s" % (np.absolute(output_eig[0] / eig[index-1]), word)
     if output_eig[0] < 0:
         print "Warning: negative eigenvalue included for word %s" % word
     output_vec = vec[:,index:]
-    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-        if dense:
-            pickle.dump((output_eig, output_vec, norm), f)
-        else:
-            pickle.dump((output_eig, output_vec, norm, basis), f)
+    return output_eig, output_vec
 
 def _load_eigen(path):
     with open(path, 'rb') as f:
@@ -240,7 +277,8 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     return new_vecx, new_vecy
 
 def _compute_measure_worker(args):
-    (word_x, word_y, measure, eigen_path, dense) = args
+    (word_x, word_y, matrices_path, dense, alpha) = args
+    eigen_path = os.path.join(matrices_path, 'eigenvectors')
     pathx = os.path.join(eigen_path, word_x + '.pkl')
     pathy = os.path.join(eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
@@ -251,22 +289,45 @@ def _compute_measure_worker(args):
     else:
         eigx, vecx, normx, basisx = _load_eigen(pathx)
         eigy, vecy, normy, basisy  = _load_eigen(pathy)
-        vecx, vecy = _merge_basis(basisx, basisy, vecx, vecy)
-    if measure == "repres":
-        tmp = compute_rel_ent(eigx, vecx, eigy, vecy)
-        return (1/(1+tmp[0]), 1/(1+tmp[1]))
-    elif measure == "weedsprec":
-        return compute_weeds_prec(eigx, vecx, eigy, vecy)
-    elif measure == "clarkede":
-        return compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
-    elif measure == "invcl":
-        forward = compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
-        backward = compute_clarke_de(eigy, vecy, normy, eigx, vecx, normx)
-        return np.sqrt(forward * (1 - backward))
+    matrix_path_x = os.path.join(matrices_path, word_x + '.bin')
+    matrix_path_y = os.path.join(matrices_path, word_y + '.bin')
+    matrix_xy, matrix_yx, basis = _load_skew_sparse(matrix_path_x, matrix_path_y, alpha)
+    eigxy, vecxy = _compute_eigenvectors(matrix_xy, word_x)
+    vecx, vecxy = _merge_basis(basisx, basis, vecx, vecxy)
+    eigyx, vecyx = _compute_eigenvectors(matrix_yx, word_y)
+    vecy, vecyx = _merge_basis(basisy, basis, vecy, vecyx)
+    tmp1 = compute_skew_rel_ent(eigx, vecx, eigxy, vecxy)
+    tmp2 = compute_skew_rel_ent(eigy, vecy, eigyx, vecyx)
+    return (1/(1+tmp1), 1/(1+tmp2))
 
 ############
 # MEASURES #
 ############
+
+def compute_skew_rel_ent(eigx, vecx, eigy, vecy):
+    trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
+    return trxx - _compute_skew_cross_entropy(vecx, eigx, vecy, eigy)
+
+def _compute_skew_cross_entropy(A, eiga, B, eigb):
+    # Project the eigenspaces onto each other.
+    AtB = np.dot(A.T, B)
+    # Check containment of one eigenspace inside the other.
+    projBA = np.linalg.norm(AtB, axis = 0) # proj of B eigvecs onto A eig space
+    spannedBA = np.all(np.absolute(projBA - np.ones(projBA.shape)) < ZERO_THRESH)
+    projAB = np.linalg.norm(AtB, axis = 1)
+    spannedAB = np.all(np.absolute(projAB - np.ones(projAB.shape)) < ZERO_THRESH)
+    # Compute cross entropy A -> B
+    if spannedAB:
+        output_ab = 0.0
+        tmp_ab = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
+        for i,lam_b in enumerate(eigb):
+            if np.absolute(tmp_ab[i]) < ZERO_THRESH:
+                continue
+            else:
+                output_ab += tmp_ab[i] * np.log(lam_b)
+    else:
+        output_ab = -float('inf')
+    return output_ab
 
 def compute_rel_ent(eigx, vecx, eigy, vecy):
     trxx = sum([lam_x * np.log(lam_x) if lam_x >= ZERO_THRESH else 0.0 for lam_x in eigx])
