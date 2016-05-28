@@ -319,7 +319,7 @@ def compute_clarke_de(eiga, A, norma, eigb, B, normb):
     tmpb = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
     numerator = sum([min(pair) for pair in zip(tmpb, eigb)])
     denominator = sum(eiga)
-    return numerator / denominator
+    return min(numerator / denominator, 1.0)
 
 def compute_fidelity(eiga, A, eigb, B):
     AtB = np.dot(A.T, B)
