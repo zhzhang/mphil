@@ -108,17 +108,17 @@ def get_avg_precision(ground_truth, results):
     for concept in concept_result_map:
         val_label_pairs = concept_result_map[concept]
         val_label_pairs = sorted(val_label_pairs, reverse=True)
-        correct = 0
+        positive = 0
         total = 0.0
         for k, (val, label) in enumerate(val_label_pairs):
             if label == "hyper":
-                correct += 1
-                total += correct / float(k+1)
+                positive += 1
+                total += positive / float(k+1)
             elif val == None:
                 break
-        if k > 0:
+        if positive > 0:
             total_concepts += 1
-            final += total / k
+            final += total / positive
     return final / total_concepts
 
 
