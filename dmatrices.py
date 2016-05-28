@@ -132,7 +132,7 @@ class DMatrices(object):
         if self.dense:
             return _load_matrix(matrix_path, self.dimension, smoothed)
         else:
-            return _load_matrix_sparse(matrix_path, self.dimension, smoothed)
+            return _load_matrix_sparse(matrix_path, smoothed)
 
     @staticmethod
     def _smooth_matrix(matrix):
@@ -160,7 +160,7 @@ def _load_matrix_dense(matrix_path, dimension, smoothed):
         DMatrices._smooth_matrix(output)
     return output / np.trace(output), np.trace(output)
 
-def _load_matrix_sparse(matrix_path, dimension, smoothed):
+def _load_matrix_sparse(matrix_path, smoothed):
     matrix_data = {}
     matrix_file = open(matrix_path, 'rb')
     while True:
@@ -179,6 +179,7 @@ def _load_matrix_sparse(matrix_path, dimension, smoothed):
     matrix_file.close()
     if smoothed:
         DMatrices._smooth_matrix(output)
+    print output
     return output / np.trace(output), np.trace(output), basis
 
 def _get_basis(matrix_data):
@@ -195,7 +196,7 @@ def _get_eigenvectors_worker(args):
     if dense:
         matrix, norm = _load_matrix_dense(matrix_path, dimension, False)
     else:
-        matrix, norm, basis = _load_matrix_sparse(matrix_path, dimension, False)
+        matrix, norm, basis = _load_matrix_sparse(matrix_path, False)
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
