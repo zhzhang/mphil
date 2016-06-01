@@ -129,14 +129,14 @@ class DMatrices(object):
             print " ; ".join(map(lambda x: "%s %e" % x, filter(lambda x: x[1] != 0.0,\
                     sorted(zip(self._wordmap,vec[:,-i]), key=lambda x: x[1], reverse=True))))
 
-    def load_matrix(self, target, smoothed=False):
+    def load_matrix(self, target):
         matrix_path = os.path.join(self._matrices_path, target + '.bin')
         if not os.path.exists(matrix_path):
             return None
         if self.dense:
-            return _load_matrix(matrix_path, self.dimension, smoothed)
+            return _load_matrix(matrix_path, self.dimension)
         else:
-            return _load_matrix_sparse(matrix_path, smoothed)
+            return _load_matrix_sparse(matrix_path)
 
     @staticmethod
     def _smooth_matrix(matrix):
@@ -148,7 +148,7 @@ class DMatrices(object):
 # HELPER FUNCTIONS #
 ####################
 
-def _load_matrix_dense(matrix_path, dimension, smoothed):
+def _load_matrix_dense(matrix_path, dimension):
     matrix_file = open(matrix_path, 'rb')
     output = np.zeros([dimension, dimension])
     x = 0
@@ -160,11 +160,9 @@ def _load_matrix_dense(matrix_path, dimension, smoothed):
             output[y,x] = value
             y += 1
         x += 1
-    if smoothed:
-        DMatrices._smooth_matrix(output)
     return output / np.trace(output), np.trace(output)
 
-def _load_matrix_sparse(matrix_path, smoothed):
+def _load_matrix_sparse(matrix_path, n=None):
     matrix_data = {}
     matrix_file = open(matrix_path, 'rb')
     while True:
@@ -173,33 +171,45 @@ def _load_matrix_sparse(matrix_path, smoothed):
             break
         x, y, value = struct.unpack('>iif', data)
         matrix_data[(x,y)] = value
-    basis = _get_basis(matrix_data)
+    matrix_file.close()
+    basis = _get_basis(matrix_data, n)
     output = np.zeros([len(basis), len(basis)])
     for x,y in matrix_data:
-        xind = basis[x]
-        yind = basis[y]
-        output[xind,yind] = matrix_data[(x,y)]
-        output[yind,xind] = matrix_data[(x,y)]
-    matrix_file.close()
-    if smoothed:
-        DMatrices._smooth_matrix(output)
+        if x in basis and y in basis:
+            xind = basis[x]
+            yind = basis[y]
+            output[xind,yind] = matrix_data[(x,y)]
+            output[yind,xind] = matrix_data[(x,y)]
     return output / np.trace(output), np.trace(output), basis
 
-def _get_basis(matrix_data):
-    basis_set = set()
-    for x,y in matrix_data:
-        basis_set.add(x)
-        basis_set.add(y)
-    return dict([(t[1], t[0]) for t in enumerate(sorted(list(basis_set)))])
+def _get_basis(matrix_data, n):
+    if not n == None:
+        diag = []
+        for pair in matrix_data:
+            if pair[0] == pair[1]:
+                diag.append((matrix_data[pair], pair[0]))
+        diag = sorted(diag, reverse=True)
+        output = {}
+        for i, (_, b) in enumerate(diag):
+            if i == n:
+                return output
+            output[b] = i
+        return output
+    else:
+        basis_set = set()
+        for x,y in matrix_data:
+            basis_set.add(x)
+            basis_set.add(y)
+        return dict([(t[1], t[0]) for t in enumerate(sorted(basis_set))])
 
 def _get_eigenvectors_worker(args):
     matrix_path, dimension, eigen_path, dense = args
     if not os.path.exists(matrix_path):
         return
     if dense:
-        matrix, norm = _load_matrix_dense(matrix_path, dimension, False)
+        matrix, norm = _load_matrix_dense(matrix_path, dimension)
     else:
-        matrix, norm, basis = _load_matrix_sparse(matrix_path, False)
+        matrix, norm, basis = _load_matrix_sparse(matrix_path, n=200)
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
