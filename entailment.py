@@ -5,10 +5,16 @@ import os
 import time
 from dmatrices import DMatrices, ZERO_THRESH
 
-def process_data(path, matrices_path, num_processes, output_path, dense):
+def process_data(path, matrices_path, num_processes, output_path, dimension, mode):
     with open(path, 'r') as f:
         data = pickle.load(f)
-    dm = DMatrices(matrices_path, dense=dense)
+    # Instantiate DMatrices
+    if dimension == None:
+        dm = DMatrices(matrices_path)
+    elif mode == None:
+        dm = DMatrices(matrices_path, n=dimension)
+    else:
+        dm = DMatrices(matrices_path, n=dimension, mode=mode)
     weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
     print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     clarke_de = dm.clarke_de(data.keys(), num_processes=num_processes)
@@ -128,7 +134,8 @@ if __name__ == "__main__":
     parser.add_argument('matrices', type=str, help='path to matrices')
     parser.add_argument('--num_processes', type=int, help='number of processes to use', default=1)
     parser.add_argument('--output', type=str, help='path to results output path')
-    parser.add_argument('--dense', action='store_true', help='flag for dense matrices input')
+    parser.add_argument('--dimension', type=int, help='intended dimension of matrices, sparse matrices only')
+    parser.add_argument('--mode', type=str, help='cutoff mode, requires sparse matrices and --dimension > 0')
     args = parser.parse_args()
-    process_data(args.path, args.matrices, args.num_processes, args.output, args.dense)
+    process_data(args.path, args.matrices, args.num_processes, args.output, args.dimension, args.mode)
 

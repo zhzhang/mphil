@@ -10,14 +10,24 @@ from multiprocessing import Pool
 ZERO_THRESH = 1e-12 # Convention is to take x nonzero if x >= ZERO_THRESH
 
 class DMatrices(object):
-    def __init__(self, matrices_path, dense=False):
+    def __init__(self, matrices_path, n=None, mode=None):
         self._matrices_path = matrices_path
-        self.dense = dense
-        self._eigen_path = os.path.join(os.path.join(self._matrices_path, 'eigenvectors'))
-        self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
         self._load_parameters(os.path.join(matrices_path, "parameters.txt"))
+        self._n = n
+        self._mode = mode
+        if self.dense and not n == None:
+            raise RuntimeError("Parameter n not allowed when matrices are dense.")
+        if not n == None:
+            if mode == None:
+                self._eigen_path = 'eigenvectors-%d' % n
+            else:
+                self._eigen_path = 'eigenvectors-%d-%s' % (n, mode)
+        else:
+            self._eigen_path = "eigenvectors"
+        self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
         self._get_words()
 
+    # Setup methods for DMatrices object.
     def _load_wordmap(self, wordmap_path):
         if not os.path.exists(wordmap_path):
             self._wordmap = None
@@ -30,13 +40,20 @@ class DMatrices(object):
         self._wordmap = wordmap
 
     def _load_parameters(self, parameters_path):
+        self.dense = False
         with open(parameters_path, 'r') as f:
-            self.dimension = int(f.readline().split(' ')[1])
+            for line in f.read().splitlines():
+                line = line.split(" ")
+                if line[0] == "dimension":
+                    self.dimension = int(line[1])
+                if line[0] == "dense":
+                    self.dense = True
 
     def _get_words(self):
         self.words = map(lambda x: os.path.splitext(x)[0],\
                 filter(lambda x: ".bin" in x, os.listdir(self._matrices_path)))
-    
+   
+    # DMatrices methods
     def get_avg_density(self):
         total = 0
         for word in self.words:
@@ -70,14 +87,13 @@ class DMatrices(object):
     def get_eigenvectors(self, words, num_processes=1):
         pool = Pool(processes=num_processes)
         args = []
-        eigen_path = self._eigen_path
+        eigen_path = os.path.join(self._matrices_path, self._eigen_path)
         if not os.path.exists(eigen_path):
             os.makedirs(eigen_path)
         for word in words:
             word = word.lower()
             if not os.path.exists(os.path.join(eigen_path, word + ".pkl")):
-                matrix_path = os.path.join(self._matrices_path, word + '.bin')
-                args.append((matrix_path, self.dimension, eigen_path, self.dense))
+                args.append((word, self._matrices_path, eigen_path, self.dimension, self.dense, self._n, self._mode))
         if len(args) == 0:
             return
         results = pool.imap(_get_eigenvectors_worker, args)
@@ -98,7 +114,7 @@ class DMatrices(object):
         pool = Pool(processes=num_processes)
         args = []
         for i, (a,b) in enumerate(pairs):
-            args.append((a, b, measure, self._eigen_path, self.dense))
+            args.append((a, b, measure, self._matrices_path, self._eigen_path, self.dense))
         results = pool.map(_compute_measure_worker, args)
         pool.close()
         pool.join()
@@ -163,7 +179,7 @@ def _load_matrix_dense(matrix_path, dimension):
         x += 1
     return output / np.trace(output), np.trace(output)
 
-def _load_matrix_sparse(matrix_path, n=None):
+def _load_matrix_sparse(matrix_path, n, mode):
     matrix_data = {}
     matrix_file = open(matrix_path, 'rb')
     while True:
@@ -173,7 +189,7 @@ def _load_matrix_sparse(matrix_path, n=None):
         x, y, value = struct.unpack('>iif', data)
         matrix_data[(x,y)] = value
     matrix_file.close()
-    basis = _get_basis(matrix_data, n)
+    basis = _get_basis(matrix_data, n, mode)
     output = np.zeros([len(basis), len(basis)])
     for x,y in matrix_data:
         if x in basis and y in basis:
@@ -183,19 +199,31 @@ def _load_matrix_sparse(matrix_path, n=None):
             output[yind,xind] = matrix_data[(x,y)]
     return output / np.trace(output), np.trace(output), basis
 
-def _get_basis(matrix_data, n):
+def _get_basis(matrix_data, n, mode):
     if not n == None:
-        diag = []
-        for pair in matrix_data:
-            if pair[0] == pair[1]:
-                diag.append((matrix_data[pair], pair[0]))
-        diag = sorted(diag, reverse=True)
-        output = {}
-        for i, (_, b) in enumerate(diag):
-            if i == n:
-                return output
-            output[b] = i
-        return output
+        if mode == None:
+            basis_set = set()
+            for x,y in matrix_data:
+                basis_set.add(x)
+                basis_set.add(y)
+            output = {}
+            for i, b in enumerate(sorted(basis_set)):
+                if n <= b:
+                    return output
+                output[b] = i
+            return output
+        elif mode == "prob":
+            diag = []
+            for pair in matrix_data:
+                if pair[0] == pair[1]:
+                    diag.append((matrix_data[pair], pair[0]))
+            diag = sorted(diag, reverse=True)
+            output = {}
+            for i, (_, b) in enumerate(diag):
+                if i == n:
+                    return output
+                output[b] = i
+            return output
     else:
         basis_set = set()
         for x,y in matrix_data:
@@ -204,13 +232,12 @@ def _get_basis(matrix_data, n):
         return dict([(t[1], t[0]) for t in enumerate(sorted(basis_set))])
 
 def _get_eigenvectors_worker(args):
-    matrix_path, dimension, eigen_path, dense = args
-    if not os.path.exists(matrix_path):
-        return
+    word, matrices_path, eigen_path, dimension, dense, n, mode = args
+    word_path = os.path.join(matrices_path, word + ".bin")
     if dense:
-        matrix, norm = _load_matrix_dense(matrix_path, dimension)
+        matrix, norm = _load_matrix_dense(word_path, dimension)
     else:
-        matrix, norm, basis = _load_matrix_sparse(matrix_path, n=200)
+        matrix, norm, basis = _load_matrix_sparse(word_path, n, mode)
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
@@ -219,11 +246,10 @@ def _get_eigenvectors_worker(args):
         total += eig[index]
     output_eig = eig[index:]
     tmp = sum(np.absolute(eig[:index]))
-    word = os.path.splitext(os.path.basename(matrix_path))[0]
+    # Print warnings
     if tmp >= 0.01:
-        # TODO: log a warning here if there is not a clean cutoff in eigenvalues.
         print "Warning: total eigenvalue error is greater than 1%"
-    if index > 0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
+    if index > 0 and eig[index-1] > 0.0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
         print "Warning: cutoff %0.2f not sharp for word %s" % (np.absolute(output_eig[0] / eig[index-1]), word)
     if output_eig[0] < 0:
         print "Warning: negative eigenvalue included for word %s" % word
@@ -254,9 +280,9 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     return new_vecx, new_vecy
 
 def _compute_measure_worker(args):
-    (word_x, word_y, measure, eigen_path, dense) = args
-    pathx = os.path.join(eigen_path, word_x + '.pkl')
-    pathy = os.path.join(eigen_path, word_y + '.pkl')
+    word_x, word_y, measure, matrices_path, eigen_path, dense = args
+    pathx = os.path.join(matrices_path, eigen_path, word_x + '.pkl')
+    pathy = os.path.join(matrices_path, eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
     if dense:
