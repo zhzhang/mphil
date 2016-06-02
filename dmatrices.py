@@ -238,6 +238,14 @@ def _get_eigenvectors_worker(args):
         matrix, norm = _load_matrix_dense(word_path, dimension)
     else:
         matrix, norm, basis = _load_matrix_sparse(word_path, n, mode)
+    output_eig, output_vec = _compute_eigenvectors(matrix)
+    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+        if dense:
+            pickle.dump((output_eig, output_vec, norm), f)
+        else:
+            pickle.dump((output_eig, output_vec, norm, basis), f)
+
+def _compute_eigenvectors(matrix):
     eig, vec = np.linalg.eigh(matrix)
     index = len(eig)
     total = 0.0
@@ -254,11 +262,8 @@ def _get_eigenvectors_worker(args):
     if output_eig[0] < 0:
         print "Warning: negative eigenvalue included for word %s" % word
     output_vec = vec[:,index:]
-    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
-        if dense:
-            pickle.dump((output_eig, output_vec, norm), f)
-        else:
-            pickle.dump((output_eig, output_vec, norm, basis), f)
+    return output_eig, output_vec
+
 
 def _load_eigen(path):
     with open(path, 'rb') as f:
