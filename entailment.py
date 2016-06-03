@@ -4,6 +4,7 @@ import numpy as np
 import os
 import time
 from dmatrices import DMatrices, ZERO_THRESH
+from scipy.stats import entropy
 
 def process_data(path, matrices_path, num_processes, output_path, dimension, mode, skew):
     with open(path, 'r') as f:
@@ -54,14 +55,9 @@ def process_vectors(pairs, vectors_path):
             continue
         vecx = vectors[pair[0]]
         vecy = vectors[pair[1]]
-        x_entails_y = 1
-        y_entails_x = 1 
-        for i in range(len(vecx)):
-            if vecx[i] > ZERO_THRESH and vecy[i] <= ZERO_THRESH:
-                x_entails_y = 0
-            if vecy[i] > ZERO_THRESH and vecx[i] <= ZERO_THRESH:
-                y_entails_x = 0 
-        results.append((x_entails_y, y_entails_x))
+        klxy = entropy(vecx, qk=vecy)
+        klyx = entropy(vecy, qk=vecx)
+        results.append((1 / (1 + klxy), 1 / (1 + klyx)))
     return results
 
 def evaluate(ground_truth, results):
