@@ -3,6 +3,7 @@ import cPickle as pickle
 import numpy as np
 import os
 import time
+import warnings
 from dmatrices import DMatrices, ZERO_THRESH
 from scipy.stats import entropy
 
@@ -39,15 +40,18 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
                 f.write(output_str + "\n")
     vectors_path = os.path.join(matrices_path, "vectors.txt")
     if os.path.exists(vectors_path):
-        vector_results = process_vectors(data.keys(), vectors_path)
+        vector_results = process_vectors(data.keys(), vectors_path, dimension)
         evaluate(data, vector_results)
 
-def process_vectors(pairs, vectors_path):
+def process_vectors(pairs, vectors_path, dimension):
     vectors = {}
     with open(vectors_path, 'r') as f:
         for line in f:
             data = line.rstrip('\n').split(' ')
-            vectors[data[0]] = np.array([float(x) for x in data[1:]])
+            if dimension == None:
+                vectors[data[0]] = np.array([float(x) for x in data[1:]])
+            else:
+                vectors[data[0]] = np.array([float(data[i]) for i in xrange(1, dimension + 1)])
     results = []
     for pair in pairs:
         if not (pair[0] in vectors and pair[1] in vectors):
@@ -137,5 +141,6 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, help='cutoff mode, requires sparse matrices and --dimension > 0')
     parser.add_argument('--skew', action='store_true', help='use skew divergence')
     args = parser.parse_args()
+    warnings.filterwarnings("once")
     process_data(args.path, args.matrices, args.num_processes, args.output, args.dimension, args.mode, args.skew)
 
