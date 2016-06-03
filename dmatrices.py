@@ -276,9 +276,9 @@ def _compute_eigenvectors(matrix):
     if tmp >= 0.01:
         print "Warning: total eigenvalue error is greater than 1%"
     if index > 0 and eig[index-1] > 0.0 and np.absolute(output_eig[0] / eig[index-1]) < 100:
-        print "Warning: cutoff %0.2f not sharp for word %s" % (np.absolute(output_eig[0] / eig[index-1]), word)
+        print "Warning: cutoff %0.2f not sharp" % np.absolute(output_eig[0] / eig[index-1])
     if output_eig[0] < 0:
-        print "Warning: negative eigenvalue included for word %s" % word
+        print "Warning: negative eigenvalue included"
     output_vec = vec[:,index:]
     return output_eig, output_vec
 

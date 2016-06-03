@@ -33,11 +33,11 @@ def _compute_cross_entropy(AtB, eiga, eigb):
         output = -float('inf')
     return output
 
-
 def compute_weeds_prec(eiga, A, eigb, B):
     AtB = np.dot(A.T, B)
     projAB = np.linalg.norm(AtB, axis = 1)
     numerator = sum([projAB[i] * eiga[i] for i in range(len(eiga))])
+    numerator = np.einsum('ij,i,ji->', AtB, eiga, AtB.T)
     denominator = sum(eiga)
     return numerator / denominator
 
@@ -45,8 +45,8 @@ def compute_clarke_de(eiga, A, norma, eigb, B, normb):
     AtB = np.dot(A.T, B)
     eiga = norma * eiga
     eigb = normb * eigb
-    tmpb = np.einsum('ij,i,ji->j', AtB, eiga, AtB.T)
-    numerator = sum([min(pair) for pair in zip(tmpb, eigb)])
+    tmpa = np.einsum('ij,i,ji->j', AtB.T, eigb, AtB)
+    numerator = sum([min(pair) for pair in zip(tmpa, eiga)])
     denominator = sum(eiga)
     return min(numerator / denominator, 1.0)
 
