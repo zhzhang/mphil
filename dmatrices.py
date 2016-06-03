@@ -80,11 +80,11 @@ class DMatrices(object):
         stats_path = os.path.join(self._matrices_path, self._eigen_path, "statistics")
         if not os.path.exists(stats_path):
             os.makedirs(stats_path)
-        with open(os.path.join(stats_path, "rank-data.pkl"), 'wb+') as f:
+        with open(os.path.join(stats_path, "rank-data.pkl"), 'w') as f:
             pickle.dump(rank, f)
         if not self.dense:
             print "FEATURES avg %0.2f std %0.2f" % (np.mean(features), np.std(features))
-            with open(os.path.join(stats_path, "features-data.pkl"), 'wb+') as f:
+            with open(os.path.join(stats_path, "features-data.pkl"), 'w') as f:
                 pickle.dump(features, f)
 
     def get_eigenvectors(self, words, num_processes=1):
@@ -149,7 +149,7 @@ class DMatrices(object):
             if not os.path.exists(word_eigen_path):
                 print "Eigenvectors not found"
                 return
-        with open(word_eigen_path, 'rb') as f:
+        with open(word_eigen_path, 'r') as f:
             eig, vec = pickle.load(f)
         for i in xrange(1,n+1):
             print "Eigenvalue %e:" % eig[-i]
@@ -257,7 +257,7 @@ def _get_eigenvectors_worker(args):
     else:
         matrix, norm, basis = _load_matrix_sparse(word_path, n, mode)
     output_eig, output_vec = _compute_eigenvectors(matrix)
-    with open(os.path.join(eigen_path, word + '.pkl'), 'wb+') as f:
+    with open(os.path.join(eigen_path, word + '.pkl'), 'w') as f:
         if dense:
             pickle.dump((output_eig, output_vec, norm), f)
         else:
@@ -284,7 +284,7 @@ def _compute_eigenvectors(matrix):
 
 
 def _load_eigen(path):
-    with open(path, 'rb') as f:
+    with open(path, 'r') as f:
         return pickle.load(f)
 
 def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
