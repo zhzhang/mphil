@@ -77,11 +77,14 @@ class DMatrices(object):
                 features.append(len(basis))
             rank.append(len(eig))
         print "RANK avg %0.2f std %0.2f" % (np.mean(rank), np.std(rank))
-        with open("rank-data.pkl", 'wb+') as f:
+        stats_path = os.path.join(self._matrices_path, self._eigen_path, "statistics")
+        if not os.path.exists(stats_path):
+            os.makedirs(stats_path)
+        with open(os.path.join(stats_path, "rank-data.pkl"), 'wb+') as f:
             pickle.dump(rank, f)
         if not self.dense:
             print "FEATURES avg %0.2f std %0.2f" % (np.mean(features), np.std(features))
-            with open("features-data.pkl", 'wb+') as f:
+            with open(os.path.join(stats_path, "features-data.pkl"), 'wb+') as f:
                 pickle.dump(features, f)
 
     def get_eigenvectors(self, words, num_processes=1):
