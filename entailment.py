@@ -5,7 +5,7 @@ import os
 import time
 from dmatrices import DMatrices, ZERO_THRESH
 
-def process_data(path, matrices_path, num_processes, output_path, dimension, mode):
+def process_data(path, matrices_path, num_processes, output_path, dimension, mode, skew):
     with open(path, 'r') as f:
         data = pickle.load(f)
     # Instantiate DMatrices
@@ -22,7 +22,10 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
     inv_cl = dm.inv_cl(data.keys(), num_processes=num_processes)
     print "AP InvCL: %0.3f" % get_avg_precision(data, clarke_de)
     t = time.time()
-    results = dm.repres(data.keys(), num_processes=num_processes)
+    if skew:
+        results = dm.skew_repres(data.keys(), num_processes=num_processes)
+    else:
+        results = dm.repres(data.keys(), num_processes=num_processes)
     print "Representativeness computed in %d seconds" % (time.time() - t)
     evaluate(data, results)
     if output_path:
@@ -136,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument('--output', type=str, help='path to results output path')
     parser.add_argument('--dimension', type=int, help='intended dimension of matrices, sparse matrices only')
     parser.add_argument('--mode', type=str, help='cutoff mode, requires sparse matrices and --dimension > 0')
+    parser.add_argument('--skew', action='store_true', help='use skew divergence')
     args = parser.parse_args()
-    process_data(args.path, args.matrices, args.num_processes, args.output, args.dimension, args.mode)
+    process_data(args.path, args.matrices, args.num_processes, args.output, args.dimension, args.mode, args.skew)
 

@@ -100,7 +100,7 @@ class DMatrices(object):
         pool.close()
         pool.join()
 
-    def _compute_measure(self, pairs, measure, num_processes):
+    def _compute_measure(self, pairs, measure, num_processes, params=None):
         # Compute missing eigenvectors.
         words = set()
         for a,b in pairs:
@@ -114,7 +114,7 @@ class DMatrices(object):
         pool = Pool(processes=num_processes)
         args = []
         for i, (a,b) in enumerate(pairs):
-            args.append((a, b, measure, self._matrices_path, self._eigen_path, self.dense))
+            args.append((a, b, measure, self._matrices_path, self._eigen_path, self.dense, params))
         results = pool.map(_compute_measure_worker, args)
         pool.close()
         pool.join()
@@ -122,6 +122,13 @@ class DMatrices(object):
 
     def repres(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "repres", num_processes)
+
+    def skew_repres(self, pairs, num_processes=1, alpha=0.99):
+        params = {}
+        params["alpha"] = alpha
+        params["n"] = self._n
+        params["mode"] = self._mode
+        return self._compute_measure(pairs, "skew", num_processes, params=params)
 
     def weeds_prec(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "weedsprec", num_processes)
@@ -180,6 +187,12 @@ def _load_matrix_dense(matrix_path, dimension):
     return output / np.trace(output), np.trace(output)
 
 def _load_matrix_sparse(matrix_path, n, mode):
+    matrix_data = _load_matrix_data(matrix_path)
+    basis = _get_basis(matrix_data, n, mode)
+    output = _convert_to_numpy(matrix_data, basis)
+    return output / np.trace(output), np.trace(output), basis
+
+def _load_matrix_data(matrix_path):
     matrix_data = {}
     matrix_file = open(matrix_path, 'rb')
     while True:
@@ -189,7 +202,9 @@ def _load_matrix_sparse(matrix_path, n, mode):
         x, y, value = struct.unpack('>iif', data)
         matrix_data[(x,y)] = value
     matrix_file.close()
-    basis = _get_basis(matrix_data, n, mode)
+    return matrix_data
+
+def _convert_to_numpy(matrix_data, basis):
     output = np.zeros([len(basis), len(basis)])
     for x,y in matrix_data:
         if x in basis and y in basis:
@@ -197,11 +212,11 @@ def _load_matrix_sparse(matrix_path, n, mode):
             yind = basis[y]
             output[xind,yind] = matrix_data[(x,y)]
             output[yind,xind] = matrix_data[(x,y)]
-    return output / np.trace(output), np.trace(output), basis
+    return output
 
 def _get_basis(matrix_data, n, mode):
     if not n == None:
-        if mode == None:
+        if mode == None: # top n according to wordmap
             basis_set = set()
             for x,y in matrix_data:
                 basis_set.add(x)
@@ -212,7 +227,7 @@ def _get_basis(matrix_data, n, mode):
                     return output
                 output[b] = i
             return output
-        elif mode == "prob":
+        elif mode == "prob": # top n by probability
             diag = []
             for pair in matrix_data:
                 if pair[0] == pair[1]:
@@ -285,11 +300,16 @@ def _merge_basis(basis_map_x, basis_map_y, vecx, vecy):
     return new_vecx, new_vecy
 
 def _compute_measure_worker(args):
-    word_x, word_y, measure, matrices_path, eigen_path, dense = args
+    word_x, word_y, measure, matrices_path, eigen_path, dense, params = args
     pathx = os.path.join(matrices_path, eigen_path, word_x + '.pkl')
     pathy = os.path.join(matrices_path, eigen_path, word_y + '.pkl')
     if not (os.path.exists(pathx) and os.path.exists(pathy)):
         return None
+    if measure == "skew": # Cannot be computed from just eigenvectors.
+        tmp = _compute_skew_divergence(word_x, word_y, matrices_path, eigen_path, dense, params)
+        if tmp == None:
+            return None
+        return (1/(1+tmp[0]), 1/(1+tmp[1]))
     if dense:
         eigx, vecx, normx = _load_eigen(pathx)
         eigy, vecy, normy = _load_eigen(pathy)
@@ -308,4 +328,48 @@ def _compute_measure_worker(args):
         forward = compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
         backward = compute_clarke_de(eigy, vecy, normy, eigx, vecx, normx)
         return np.sqrt(forward * (1 - backward))
+
+def _compute_skew_divergence(word_x, word_y, matrices_path, eigen_path, dense, params):
+    pathx = os.path.join(matrices_path, eigen_path, word_x + '.pkl')
+    pathy = os.path.join(matrices_path, eigen_path, word_y + '.pkl')
+    if not (os.path.exists(pathx) and os.path.exists(pathy)):
+        return None
+    if dense: # TODO
+        eigx, vecx, normx = _load_eigen(pathx)
+        eigy, vecy, normy = _load_eigen(pathy)
+    else:
+        eigx, vecx, normx, basisx = _load_eigen(pathx)
+        eigy, vecy, normy, basisy  = _load_eigen(pathy)
+        matrix_path_x = os.path.join(matrices_path, word_x + ".bin")
+        matrix_path_y = os.path.join(matrices_path, word_y + ".bin")
+        matrix_xy, matrix_yx, basis = _load_skew_sparse(matrix_path_x, matrix_path_y, params['alpha'], params['n'], params['mode'])
+        eigxy, vecxy = _compute_eigenvectors(matrix_xy)
+        eigyx, vecyx = _compute_eigenvectors(matrix_yx)
+        vecx, vecxy = _merge_basis(basisx, basis, vecx, vecxy)
+        vecy, vecyx = _merge_basis(basisy, basis, vecy, vecyx)
+        relentxy = compute_single_rel_ent(eigx, vecx, eigxy, vecxy)
+        relentyx = compute_single_rel_ent(eigy, vecy, eigyx, vecyx)
+        return (relentxy, relentyx)
+
+def _load_skew_sparse(matrix_path_x, matrix_path_y, alpha, n, mode):
+    # Retrieve matrix data and basis.
+    matrix_data_x = _load_matrix_data(matrix_path_x)
+    basis_x = _get_basis(matrix_data_x, n, mode)
+    matrix_data_y = _load_matrix_data(matrix_path_y)
+    basis_y = _get_basis(matrix_data_y, n, mode)
+    # Merge basis.
+    basis = basis_x.copy()
+    index = max(basis.values())
+    for key in basis_y:
+        if not key in basis:
+            index += 1
+            basis[key] = index
+    # Convext to numpy.
+    matrix_x = _convert_to_numpy(matrix_data_x, basis)
+    matrix_y = _convert_to_numpy(matrix_data_y, basis)
+    matrix_x = matrix_x / np.trace(matrix_x)
+    matrix_y = matrix_y / np.trace(matrix_y)
+    output_xy = (1-alpha) * matrix_x + alpha * matrix_y
+    output_yx = (1-alpha) * matrix_y + alpha * matrix_x
+    return output_xy, output_yx, basis
 
