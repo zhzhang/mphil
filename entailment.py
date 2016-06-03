@@ -10,6 +10,7 @@ from scipy.stats import entropy
 def process_data(path, matrices_path, num_processes, output_path, dimension, mode, skew):
     with open(path, 'r') as f:
         data = pickle.load(f)
+    pairs = [(point[0], point[1]) for point in data]
     # Instantiate DMatrices
     if dimension == None:
         dm = DMatrices(matrices_path)
@@ -17,17 +18,17 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
         dm = DMatrices(matrices_path, n=dimension)
     else:
         dm = DMatrices(matrices_path, n=dimension, mode=mode)
-    weeds = dm.weeds_prec(data.keys(), num_processes=num_processes)
+    weeds = dm.weeds_prec(pairs, num_processes=num_processes)
     print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
-    clarke_de = dm.clarke_de(data.keys(), num_processes=num_processes)
+    clarke_de = dm.clarke_de(pairs, num_processes=num_processes)
     print "AP ClarkeDE: %0.3f" % get_avg_precision(data, clarke_de)
-    inv_cl = dm.inv_cl(data.keys(), num_processes=num_processes)
+    inv_cl = dm.inv_cl(pairs, num_processes=num_processes)
     print "AP InvCL: %0.3f" % get_avg_precision(data, clarke_de)
     t = time.time()
     if skew:
-        results = dm.skew_repres(data.keys(), num_processes=num_processes)
+        results = dm.skew_repres(pairs, num_processes=num_processes)
     else:
-        results = dm.repres(data.keys(), num_processes=num_processes)
+        results = dm.repres(pairs, num_processes=num_processes)
     print "Representativeness computed in %d seconds" % (time.time() - t)
     evaluate(data, results)
     if output_path:
@@ -40,7 +41,7 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
                 f.write(output_str + "\n")
     vectors_path = os.path.join(matrices_path, "vectors.txt")
     if os.path.exists(vectors_path):
-        vector_results = process_vectors(data.keys(), vectors_path, dimension)
+        vector_results = process_vectors(pairs, vectors_path, dimension)
         evaluate(data, vector_results)
 
 def process_vectors(pairs, vectors_path, dimension):
@@ -78,14 +79,14 @@ def evaluate(ground_truth, results):
     pos = 0
     neg = 0
     nonzero = 0
-    for i, pair in enumerate(ground_truth):
+    for i, (con, relu, cla, rel) in enumerate(ground_truth):
         if results[i] == None:
             continue
         total += 1
         r_ab, r_ba = results[i]
         if r_ab >= ZERO_THRESH or r_ba >= ZERO_THRESH:
             nonzero += 1
-        if ground_truth[pair][0] == "hyper":
+        if rel == "hyper":
             pos += 1
             if r_ab > r_ba and r_ab >= ZERO_THRESH:
                 true_pos += 1
@@ -93,7 +94,7 @@ def evaluate(ground_truth, results):
                     correct += 1
             elif r_ab <= r_ba:
                 false_neg += 1
-        elif ground_truth[pair][0] == "random-n":
+        elif rel == "random-n":
             neg += 1
             if r_ab > r_ba and r_ab >= ZERO_THRESH:
                 false_pos += 1
@@ -107,11 +108,11 @@ def evaluate(ground_truth, results):
 
 def get_avg_precision(ground_truth, results):
     concept_result_map = {}
-    for i, pair in enumerate(ground_truth):
-        if pair[0] in concept_result_map:
-            concept_result_map[pair[0]].append((results[i], ground_truth[pair][0]))
+    for i, (con, relu, cla, rel) in enumerate(ground_truth):
+        if con in concept_result_map:
+            concept_result_map[con].append((results[i], rel))
         else:
-            concept_result_map[pair[0]] = [(results[i], ground_truth[pair][0])]
+            concept_result_map[con] = [(results[i], rel)]
     final = 0.0
     total_concepts = 0
     for concept in concept_result_map:
