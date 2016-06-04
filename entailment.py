@@ -33,7 +33,7 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
     evaluate(data, results)
     if output_path:
         with open(output_path, 'w') as f:
-            for i, pair in enumerate(data):
+            for i, pair in enumerate(pairs):
                 if results[i]:
                     output_str = "%s %s %0.6f %0.6f" % (pair + results[i])
                 else:
