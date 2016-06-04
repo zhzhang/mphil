@@ -368,11 +368,26 @@ def _load_skew_sparse(matrix_path_x, matrix_path_y, alpha, n, mode):
             index += 1
             basis[key] = index
     # Convext to numpy.
-    matrix_x = _convert_to_numpy(matrix_data_x, basis)
-    matrix_y = _convert_to_numpy(matrix_data_y, basis)
+    if mode == "prob":
+        matrix_x = _convert_to_numpy_pruned(matrix_data_x, basis, basis_x)
+        matrix_y = _convert_to_numpy_pruned(matrix_data_y, basis, basis_y)
+    else:
+        matrix_x = _convert_to_numpy(matrix_data_x, basis)
+        matrix_y = _convert_to_numpy(matrix_data_y, basis)
     matrix_x = matrix_x / np.trace(matrix_x)
     matrix_y = matrix_y / np.trace(matrix_y)
     output_xy = (1-alpha) * matrix_x + alpha * matrix_y
     output_yx = (1-alpha) * matrix_y + alpha * matrix_x
     return output_xy, output_yx, basis
+
+def _convert_to_numpy_pruned(matrix_data, basis, pruning_basis):
+    output = np.zeros([len(basis), len(basis)])
+    for x,y in matrix_data:
+        if x in basis and y in basis\
+                and x in pruning_basis and y in pruning_basis:
+            xind = basis[x]
+            yind = basis[y]
+            output[xind,yind] = matrix_data[(x,y)]
+            output[yind,xind] = matrix_data[(x,y)]
+    return output
 
