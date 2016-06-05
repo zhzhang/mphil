@@ -44,6 +44,8 @@ def run_tests():
     evaluate(skew1, true_skew1)
     evaluate(skew2, true_skew2)
 
+    print "Tests completed successfully."
+
 def evaluate(A,B):
     if not (np.absolute(A - B) < dmatrices.ZERO_THRESH).all():
         raise RuntimeError("Failed test")
