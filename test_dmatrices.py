@@ -114,7 +114,7 @@ def get_dynam_matrix(matrix, norm):
     cummulative = 0.0
     index = 0
     new_basis = {}
-    while cummulative / norm < 0.8:
+    while cummulative / norm < 0.85:
         cummulative += diag[index][0]
         new_basis[diag[index][1]] = index
         index += 1

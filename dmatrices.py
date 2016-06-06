@@ -110,7 +110,7 @@ class DMatrices(object):
             words.add(a)
             words.add(b)
         t = time.time()
-        self.get_eigenvectors(words)
+        self.get_eigenvectors(words, num_processes=num_processes)
         print "Eigenvectors computed in %d seconds" % (time.time() - t)
         pool = Pool(processes=num_processes)
         args = []
@@ -244,7 +244,7 @@ def _get_basis(matrix_data, n, mode):
             total = float(sum([x[0] for x in diag]))
             cummulative = 0
             for i, (v, b) in enumerate(diag):
-                if cummulative / total >= 0.8:
+                if cummulative / total >= 0.85:
                     return output
                 output[b] = i
                 cummulative += v
