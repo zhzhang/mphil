@@ -44,9 +44,11 @@ def process_vectors(pairs, vectors_path, dimension):
         for line in f:
             data = line.rstrip('\n').split(' ')
             if dimension == None:
-                vectors[data[0]] = np.array([float(x) for x in data[1:]])
+                vec = np.array([float(x) for x in data[1:]])
             else:
-                vectors[data[0]] = np.array([float(data[i]) for i in xrange(1, dimension + 1)])
+                vec = np.array([float(data[i]) for i in xrange(1, dimension + 1)])
+            if np.linalg.norm(vec) >= ZERO_THRESH:
+                vectors[data[0]] = vec
     results = []
     for pair in pairs:
         if not (pair[0] in vectors and pair[1] in vectors):
