@@ -143,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_processes', type=int, help='number of processes to use', default=1)
     parser.add_argument('--output', type=str, help='path to results output path')
     parser.add_argument('--dimension', type=int, help='intended dimension of matrices, sparse matrices only')
-    parser.add_argument('--mode', type=str, help='cutoff mode, requires sparse matrices and --dimension > 0')
+    parser.add_argument('--mode', type=str, help='cutoff mode, requires sparse matrices')
     parser.add_argument('--skew', action='store_true', help='use skew divergence')
     args = parser.parse_args()
     warnings.filterwarnings("once")

@@ -218,36 +218,44 @@ def _convert_to_numpy(matrix_data, basis):
     return output
 
 def _get_basis(matrix_data, n, mode):
-    if not n == None:
-        if mode == None: # top n according to wordmap
-            basis_set = set()
-            for x,y in matrix_data:
-                basis_set.add(x)
-                basis_set.add(y)
-            output = {}
-            for i, b in enumerate(sorted(basis_set)):
-                if n <= b:
-                    return output
-                output[b] = i
-            return output
-        elif mode == "prob": # top n by probability
-            diag = []
-            for pair in matrix_data:
-                if pair[0] == pair[1]:
-                    diag.append((matrix_data[pair], pair[0]))
-            diag = sorted(diag, reverse=True)
-            output = {}
-            for i, (_, b) in enumerate(diag):
-                if i == n:
-                    return output
-                output[b] = i
-            return output
-    else:
+    if n == None and mode == None:
         basis_set = set()
         for x,y in matrix_data:
             basis_set.add(x)
             basis_set.add(y)
         return dict([(t[1], t[0]) for t in enumerate(sorted(basis_set))])
+    elif mode == None: # Cutoff by count.
+        basis_set = set()
+        for x,y in matrix_data:
+            basis_set.add(x)
+            basis_set.add(y)
+        output = {}
+        for i, b in enumerate(sorted(basis_set)):
+            if n <= b:
+                return output
+            output[b] = i
+        return output
+    elif mode == "prob": # top n by probability
+        diag = []
+        for pair in matrix_data:
+            if pair[0] == pair[1]:
+                diag.append((matrix_data[pair], pair[0]))
+        diag = sorted(diag, reverse=True)
+        output = {}
+        if n == None: # Sort and cutoff by probability.
+            total = float(sum([x[0] for x in diag]))
+            cummulative = 0
+            for i, (v, b) in enumerate(diag):
+                if cummulative / total >= 0.8:
+                    return output
+                output[b] = i
+                cummulative += v
+        else: # Sort by probability, cutoff by count.
+            for i, (_, b) in enumerate(diag):
+                if i == n:
+                    return output
+                output[b] = i
+            return output
 
 def _get_eigenvectors_worker(args):
     word, matrices_path, eigen_path, dimension, dense, n, mode = args

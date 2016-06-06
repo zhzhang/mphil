@@ -7,9 +7,12 @@ def run_tests():
     matrix, norm, basis = dmatrices._load_matrix_sparse(path, None, None)
     matrix_half, norm_half, basis_half = dmatrices._load_matrix_sparse(path, 100, None)
     matrix_prob, norm_prob, basis_prob = dmatrices._load_matrix_sparse(path, 100, "prob")
+    matrix_dynam, norm_dynam, basis_dynam = dmatrices._load_matrix_sparse(path, None, "prob")
     evaluate(norm * matrix[:100,:100], norm_half * matrix_half)
     true_prob_matrix = get_prob_matrix(matrix, norm, 100)
     evaluate(true_prob_matrix, norm_prob * matrix_prob)
+    true_dynam_matrix = get_dynam_matrix(matrix, norm)
+    evaluate(true_dynam_matrix, norm_dynam * matrix_dynam)
 
     # Test basis merging.
     path2 = "test_matrices/villa.bin"
@@ -40,6 +43,13 @@ def run_tests():
     matrix, norm, basis = dmatrices._load_matrix_sparse(path, 100, "prob")
     matrix2, norm2, basis2 = dmatrices._load_matrix_sparse(path2, 100, "prob")
     skew1, skew2, skew_basis = dmatrices._load_skew_sparse(path, path2, 0.6, 100, "prob")
+    true_skew1, true_skew2 = get_skew_matrix(matrix, basis, matrix2, basis2, skew_basis)
+    evaluate(skew1, true_skew1)
+    evaluate(skew2, true_skew2)
+
+    matrix, norm, basis = dmatrices._load_matrix_sparse(path, None, "prob")
+    matrix2, norm2, basis2 = dmatrices._load_matrix_sparse(path2, None, "prob")
+    skew1, skew2, skew_basis = dmatrices._load_skew_sparse(path, path2, 0.6, None, "prob")
     true_skew1, true_skew2 = get_skew_matrix(matrix, basis, matrix2, basis2, skew_basis)
     evaluate(skew1, true_skew1)
     evaluate(skew2, true_skew2)
@@ -85,6 +95,30 @@ def get_prob_matrix(matrix, norm, dim):
     new_basis = dict([(b, i) for i, (_, b) in enumerate(sorted([(val, index)\
         for index, val in enumerate(diag)], reverse=True)[:dim])])
     output = np.zeros([dim, dim])
+    for i in xrange(matrix.shape[0]):
+        for j in xrange(matrix.shape[0]):
+            try:
+                x = new_basis[i]
+                y = new_basis[j]
+            except KeyError:
+                continue
+            output[x,y] = output[y,x] = matrix[i,j]
+    return output
+
+def get_dynam_matrix(matrix, norm):
+    matrix = norm * matrix
+    diag = []
+    for i in xrange(matrix.shape[0]):
+        diag.append((matrix[i,i], i))
+    diag = sorted(diag, reverse=True)
+    cummulative = 0.0
+    index = 0
+    new_basis = {}
+    while cummulative / norm < 0.8:
+        cummulative += diag[index][0]
+        new_basis[diag[index][1]] = index
+        index += 1
+    output = np.zeros([index, index])
     for i in xrange(matrix.shape[0]):
         for j in xrange(matrix.shape[0]):
             try:
