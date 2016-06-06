@@ -17,13 +17,11 @@ class DMatrices(object):
         self._mode = mode
         if self.dense and not n == None:
             raise RuntimeError("Parameter n not allowed when matrices are dense.")
+        self._eigen_path = "eigenvectors"
         if not n == None:
-            if mode == None:
-                self._eigen_path = 'eigenvectors-%d' % n
-            else:
-                self._eigen_path = 'eigenvectors-%d-%s' % (n, mode)
-        else:
-            self._eigen_path = "eigenvectors"
+            self._eigen_path += "-%d" % n
+        if not mode == None:
+            self._eigen_path += "-%s" % mode
         self._load_wordmap(os.path.join(matrices_path, "wordmap.txt"))
         self._get_words()
 
