@@ -17,7 +17,7 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
     clarke_de = dm.clarke_de(pairs, num_processes=num_processes)
     print "AP ClarkeDE: %0.3f" % get_avg_precision(data, clarke_de)
     inv_cl = dm.inv_cl(pairs, num_processes=num_processes)
-    print "AP InvCL: %0.3f" % get_avg_precision(data, clarke_de)
+    print "AP InvCL: %0.3f" % get_avg_precision(data, inv_cl)
     t = time.time()
     if skew:
         results = dm.skew_repres(pairs, num_processes=num_processes)

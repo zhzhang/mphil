@@ -33,7 +33,7 @@ class DMatrices(object):
         wordmap = []
         with open(wordmap_path, 'r') as f:
             for line in f.readlines():
-                word = line.lower()
+                word = line.lower().rstrip("\n")
                 wordmap.append(word)
         self._wordmap = wordmap
 
@@ -65,7 +65,7 @@ class DMatrices(object):
         features = []
         self.get_eigenvectors(self.words)
         for word in self.words:
-            path = os.path.join(self._eigen_path, word + '.pkl')
+            path = os.path.join(self._matrices_path, self._eigen_path, word + '.pkl')
             if not os.path.exists(path):
                 continue
             if self.dense:
@@ -141,27 +141,31 @@ class DMatrices(object):
         return self._compute_measure(pairs, "invcl", num_processes)
 
     def print_eigenvectors(self, word, n=1):
-        word_eigen_path = os.path.join(self._eigen_path, word + ".pkl")
+        word_eigen_path = os.path.join(self._matrices_path, self._eigen_path, word + ".pkl")
         if not os.path.exists(word_eigen_path):
             self.get_eigenvectors((word,))
             if not os.path.exists(word_eigen_path):
                 print "Eigenvectors not found"
                 return
-        with open(word_eigen_path, 'r') as f:
-            eig, vec = pickle.load(f)
-        for i in xrange(1,n+1):
-            print "Eigenvalue %e:" % eig[-i]
-            print " ; ".join(map(lambda x: "%s %e" % x, filter(lambda x: x[1] != 0.0,\
-                    sorted(zip(self._wordmap,vec[:,-i]), key=lambda x: x[1], reverse=True))))
+        if self.dense:
+            print "Printing eigenvectors not available for dense matrices."
+        else:
+            eig, vec, norm, basis = _load_eigen(word_eigen_path)
+        inv_basis = {v: k for k, v in basis.items()}
+        for i in xrange(1,n+2):
+            print "Eigenvalue %0.3f:" % eig[-i]
+            print " ; ".join(map(lambda x: "%s %0.3f" % x, filter(lambda x: x[1] != 0.0,\
+                    sorted(zip([self._wordmap[inv_basis[k]] for k in range(vec.shape[0])],\
+                        vec[:,-i] * vec[:,-i]), key=lambda x: x[1], reverse=True)))[:10])
 
     def load_matrix(self, target):
         matrix_path = os.path.join(self._matrices_path, target + '.bin')
         if not os.path.exists(matrix_path):
             return None
         if self.dense:
-            return _load_matrix(matrix_path, self.dimension)
+            return _load_matrix_dense(matrix_path, self.dimension)
         else:
-            return _load_matrix_sparse(matrix_path)
+            return _load_matrix_sparse(matrix_path, self._n, self._mode)
 
     @staticmethod
     def _smooth_matrix(matrix):
@@ -174,7 +178,7 @@ class DMatrices(object):
 ####################
 
 def _load_matrix_dense(matrix_path, dimension):
-    matrix_file = open(matrix_path, 'rb')
+    matrix_file = open(matrix_path, 'r')
     output = np.zeros([dimension, dimension])
     x = 0
     while x < dimension:
@@ -195,7 +199,7 @@ def _load_matrix_sparse(matrix_path, n, mode):
 
 def _load_matrix_data(matrix_path):
     matrix_data = {}
-    matrix_file = open(matrix_path, 'rb')
+    matrix_file = open(matrix_path, 'r')
     while True:
         data = matrix_file.read(12)
         if len(data) < 12:
@@ -244,7 +248,7 @@ def _get_basis(matrix_data, n, mode):
             total = float(sum([x[0] for x in diag]))
             cummulative = 0
             for i, (v, b) in enumerate(diag):
-                if cummulative / total >= 0.85:
+                if cummulative / total >= 0.5 or i >= 4000:
                     return output
                 output[b] = i
                 cummulative += v
@@ -262,7 +266,11 @@ def _get_eigenvectors_worker(args):
         matrix, norm = _load_matrix_dense(word_path, dimension)
     else:
         matrix, norm, basis = _load_matrix_sparse(word_path, n, mode)
-    output_eig, output_vec = _compute_eigenvectors(matrix)
+    try:
+        output_eig, output_vec = _compute_eigenvectors(matrix)
+    except np.linalg.linalg.LinAlgError:
+        print "Encountered LinAlgError"
+        return
     with open(os.path.join(eigen_path, word + '.pkl'), 'w') as f:
         if dense:
             pickle.dump((output_eig, output_vec, norm), f)
@@ -352,8 +360,12 @@ def _compute_skew_divergence(word_x, word_y, matrices_path, eigen_path, dense, p
         matrix_path_x = os.path.join(matrices_path, word_x + ".bin")
         matrix_path_y = os.path.join(matrices_path, word_y + ".bin")
         matrix_xy, matrix_yx, basis = _load_skew_sparse(matrix_path_x, matrix_path_y, params['alpha'], params['n'], params['mode'])
-        eigxy, vecxy = _compute_eigenvectors(matrix_xy)
-        eigyx, vecyx = _compute_eigenvectors(matrix_yx)
+        try:
+            eigxy, vecxy = _compute_eigenvectors(matrix_xy)
+            eigyx, vecyx = _compute_eigenvectors(matrix_yx)
+        except np.linalg.linalg.LinAlgError:
+            print "Eigenvectors failed to converge for %s %s" % (word_x, word_y)
+            return None
         vecx, vecxy = _merge_basis(basisx, basis, vecx, vecxy)
         vecy, vecyx = _merge_basis(basisy, basis, vecy, vecyx)
         relentxy = compute_single_rel_ent(eigx, vecx, eigxy, vecxy)
