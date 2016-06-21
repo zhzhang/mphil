@@ -53,7 +53,7 @@ def compute_clarke_de(eiga, A, norma, eigb, B, normb):
 def compute_fidelity(eiga, A, eigb, B):
     AtB = np.dot(A.T, B)
     eigsqrt = np.sqrt(np.outer(eiga, eigb))
-    return np.einsum('ij,ij->', AtB, eigsqrt)
+    return np.einsum('ij,ij->', np.square(AtB), eigsqrt)
 
 if __name__ == '__main__':
     pass

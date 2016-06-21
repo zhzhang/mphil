@@ -12,6 +12,8 @@ def process_data(path, matrices_path, num_processes, output_path, dimension, mod
     pairs = [(point[0], point[1]) for point in data]
     # Instantiate DMatrices
     dm = DMatrices(matrices_path, n=dimension, mode=mode)
+    fid = dm.fidelity(pairs, num_processes=num_processes)
+    print "Fidelity : %0.3f" % get_avg_precision(data, fid)
     weeds = dm.weeds_prec(pairs, num_processes=num_processes)
     print "AP WeedsPrec: %0.3f" % get_avg_precision(data, weeds)
     clarke_de = dm.clarke_de(pairs, num_processes=num_processes)

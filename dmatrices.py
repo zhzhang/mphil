@@ -140,6 +140,9 @@ class DMatrices(object):
     def inv_cl(self, pairs, num_processes=1):
         return self._compute_measure(pairs, "invcl", num_processes)
 
+    def fidelity(self, pairs, num_processes=1):
+        return self._compute_measure(pairs, "fidelity", num_processes)
+
     def print_eigenvectors(self, word, n=1):
         word_eigen_path = os.path.join(self._matrices_path, self._eigen_path, word + ".pkl")
         if not os.path.exists(word_eigen_path):
@@ -341,6 +344,8 @@ def _compute_measure_worker(args):
         return compute_weeds_prec(eigx, vecx, eigy, vecy)
     elif measure == "clarkede":
         return compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
+    elif measure == "fidelity":
+        return compute_fidelity(eigx, vecx, eigy, vecy)
     elif measure == "invcl":
         forward = compute_clarke_de(eigx, vecx, normx, eigy, vecy, normy)
         backward = compute_clarke_de(eigy, vecy, normy, eigx, vecx, normx)
